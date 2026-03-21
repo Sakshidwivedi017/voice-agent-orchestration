@@ -46,6 +46,8 @@ from livekit.agents import (
     WorkerOptions,
     cli,
     llm,
+    pipeline,
+    VoicePipelineAgent,
 )
 from livekit.plugins import openai, sarvam, silero
 
@@ -607,14 +609,18 @@ class OutboundAssistant(Agent):
 # MAIN ENTRYPOINT
 # ══════════════════════════════════════════════════════════════════════════════
 
-agent_is_speaking = False
-
 async def entrypoint(ctx: JobContext):
     global agent_is_speaking
+    logger.info(f"[JOB-START] Starting agent job for {ctx.room.name}")
 
     # ── Connect ───────────────────────────────────────────────────────────
     await ctx.connect()
-    logger.info(f"[ROOM] Connected: {ctx.room.name}")
+    logger.info(f"[STEP 1] ✅ Call Connected to Room: {ctx.room.name}")
+
+    # ── Wait for Participant ──────────────────────────────────────────────
+    logger.info("[STEP 2] ⏳ Waiting for participant to join...")
+    await ctx.wait_for_participant()
+    logger.info("[STEP 2] ✅ Participant joined — preparing agent pipeline.")
 
     # ── Extract caller info ───────────────────────────────────────────────
     phone_number = None
@@ -641,16 +647,27 @@ async def entrypoint(ctx: JobContext):
             
         attr = participant.attributes or {}
         
+        # Robustly extract Caller Phone (who is calling)
         if not phone_number:
-            phone_number = attr.get("sip.phoneNumber") or attr.get("phoneNumber")
+            phone_number = (
+                attr.get("sip.fromUser")
+                or attr.get("sip.phoneNumber")
+                or attr.get("phoneNumber")
+            )
+
+        # Robustly extract Agent Number (the business DID dialed)
+        if not agent_number:
+            agent_number = (
+                attr.get("sip.toUser")
+                or attr.get("sip.callTo", "")
+            )
+
+        # Identity fallback (regex) - useful for some SIP bridges
         if not phone_number and "+" in identity:
             import re as _re
             m = _re.search(r"\+\d{7,15}", identity)
             if m:
                 phone_number = m.group()
-                
-        if not agent_number:
-            agent_number = attr.get("sip.callTo", "")
 
     # ── Normalize phone to E.164 BEFORE rate-limiting and DB lookup ────────
     caller_phone = normalize_number(phone_number) if phone_number else "unknown"
@@ -675,9 +692,10 @@ async def entrypoint(ctx: JobContext):
     # ── 🔥 ALWAYS fetch system_prompt + first_message from DB ────────────
     # Hard-fails if number is not found — no silent fallback in production.
     # Look up using the agent's DID, not the caller's number!
+    logger.info(f"[STEP 3] 🔍 Fetching DB config for DID: {agent_phone_normalized}")
     db_agent_config = await fetch_agent_config_from_db(agent_phone_normalized)
     live_config.update(db_agent_config)  # DB values override file values
-    logger.info("[DB-CONFIG] ✅ Agent config loaded from database — injecting into session")
+    logger.info(f"[STEP 3] ✅ DB Config Loaded Successfully (Agent ID: {db_agent_config.get('agent_id')})")
 
     delay_setting = live_config.get("stt_min_endpointing_delay", 0.05)
     llm_model     = live_config.get("llm_model", "gpt-4o-mini")
@@ -794,43 +812,51 @@ async def entrypoint(ctx: JobContext):
     turn_count    = 0
     interrupt_count = 0  # (#30)
 
-    # ── Build agent ───────────────────────────────────────────────────────
-    agent = OutboundAssistant(
-        agent_tools=agent_tools,
-        first_line=live_config.get("first_line", ""),
-        live_config=live_config,
+    # ── IST Context + Instructions ────────────────────────────────────────
+    base_instructions = live_config.get("agent_instructions", "")
+    ist_context       = get_ist_time_context()
+    lang_preset       = live_config.get("lang_preset", "multilingual")
+    lang_instruction  = get_language_instruction(lang_preset)
+    final_instructions = base_instructions + ist_context + lang_instruction
+
+    # Token counter (#11)
+    token_count = count_tokens(final_instructions)
+    logger.info(f"[PROMPT] System prompt: {token_count} tokens")
+
+    # ── Build Agent (using VoicePipelineAgent as requested) ──────────────
+    initial_ctx = llm.ChatContext().append(
+        role="system",
+        text=final_instructions,
     )
 
-    # ── Build session (#3 noise cancellation attempted) ───────────────────
-    try:
-        from livekit.agents import noise_cancellation as nc
-        _noise_cancel = nc.BVC()
-        logger.info("[AUDIO] BVC noise cancellation enabled")
-    except Exception:
-        _noise_cancel = None
-        logger.info("[AUDIO] BVC not available — running without noise cancellation")
-
-    room_input = RoomInputOptions(close_on_disconnect=False)
-    if _noise_cancel:
-        try:
-            room_input = RoomInputOptions(close_on_disconnect=False, noise_cancellation=_noise_cancel)
-        except Exception:
-            room_input = RoomInputOptions(close_on_disconnect=False)
-
-    session = AgentSession(
+    agent = VoicePipelineAgent(
+        vad=silero.VAD.load(),
         stt=agent_stt,
         llm=agent_llm,
         tts=agent_tts,
-        turn_detection="stt",
-        min_endpointing_delay=float(delay_setting),  # 0.05 default (#6)
+        chat_ctx=initial_ctx,
+        fnc_ctx=agent_tools,
         allow_interruptions=True,
+        min_endpointing_delay=float(delay_setting),
+        before_tts_cb=before_tts_cb,
     )
 
-    await session.start(room=ctx.room, agent=agent, room_input_options=room_input)
+    # ── Start Agent ───────────────────────────────────────────────────────
+    logger.info("[STEP 4] 🚀 Starting VoicePipelineAgent...")
+    await agent.start(ctx.room)
+    logger.info("[STEP 4] ✅ Agent is now live and listening.")
+
+    # ── Say First Message ─────────────────────────────────────────────────
+    first_message = live_config.get("first_line", "")
+    if first_message:
+        logger.info(f"[STEP 5] 🗣️  Speaking first message: {first_message[:60]}...")
+        await agent.say(first_message, allow_interruptions=True)
+        logger.info("[STEP 5] ✅ First message completed.")
+
 
     # ── TTS pre-warm (#12) ────────────────────────────────────────────────
     try:
-        await session.tts.prewarm()
+        await agent.tts.prewarm()
         logger.info("[TTS] Pre-warmed successfully")
     except Exception as e:
         logger.debug(f"[TTS] Pre-warm skipped: {e}")
@@ -841,18 +867,18 @@ async def entrypoint(ctx: JobContext):
     egress_id = None  # Recording disabled (Supabase S3 removed)
 
     # ── Session event handlers ────────────────────────────────────────────
-    @session.on("agent_speech_started")
+    @agent.on("agent_speech_started")
     def _agent_speech_started(ev):
         global agent_is_speaking
         agent_is_speaking = True
 
-    @session.on("agent_speech_finished")
+    @agent.on("agent_speech_finished")
     def _agent_speech_finished(ev):
         global agent_is_speaking
         agent_is_speaking = False
 
     # Interrupt logging (#30)
-    @session.on("agent_speech_interrupted")
+    @agent.on("agent_speech_interrupted")
     def _on_interrupted(ev):
         nonlocal interrupt_count
         interrupt_count += 1
@@ -864,12 +890,12 @@ async def entrypoint(ctx: JobContext):
         "haan", "han", "theek", "theek hai", "accha", "ji", "ha",
     }
 
-    @session.on("user_speech_committed")
-    def on_user_speech_committed(ev):
+    @agent.on("user_transcript_finished")
+    def on_user_speech_committed(ev: pipeline.TranscriptionEvent):
         nonlocal turn_count
         global agent_is_speaking
 
-        transcript = ev.user_transcript.strip()
+        transcript = ev.text.strip()
         transcript_lower = transcript.lower().rstrip(".")
 
         if agent_is_speaking:
@@ -887,7 +913,7 @@ async def entrypoint(ctx: JobContext):
         if turn_count >= max_turns:
             logger.info(f"[LIMIT] Reached {max_turns} turns — wrapping up")
             asyncio.create_task(
-                session.generate_reply(
+                agent.generate_reply(
                     instructions="Politely wrap up: thank the caller, say they can call back anytime, and say a warm goodbye."
                 )
             )
@@ -1128,6 +1154,18 @@ Return only the intent."""
         asyncio.create_task(process_call_analytics(transcript_text, booking_status_msg, duration))
 
     ctx.add_shutdown_callback(unified_shutdown_hook)
+
+    # ── Keep Alive ──────────────────────────────────────────────────────────
+    # The entrypoint must remain active for the duration of the call.
+    # Returning from entrypoint signals that the agent's work is finished.
+    logger.info("[STEP 6] 💎 Agent persistent loop active — waiting for call termination.")
+    try:
+        while ctx.room.is_connected:
+            await asyncio.sleep(1)
+    except asyncio.CancelledError:
+        logger.info("[SHUTDOWN] Persistent loop cancelled.")
+    finally:
+        logger.info("[SHUTDOWN] Persistent loop finished.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
