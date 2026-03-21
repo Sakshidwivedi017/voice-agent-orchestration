@@ -1,0 +1,10 @@
+.aspectRatio {
+    position: relative;
+    width: 100%;
+}
+
+.aspectRatio> :first-child {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}

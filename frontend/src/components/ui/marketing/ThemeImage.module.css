@@ -1,0 +1,11 @@
+.lightOnly {
+    display: none !important;
+}
+
+:global(html[data-theme='light']) .lightOnly {
+    display: block !important;
+}
+
+:global(html[data-theme='light']) .darkOnly {
+    display: none !important;
+}

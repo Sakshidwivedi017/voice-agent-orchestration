@@ -1,0 +1,16 @@
+.pagination {
+    display: flex;
+    align-items: center;
+    gap: var(--space-16);
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+}
+
+.info {
+    color: var(--color-text-muted);
+}
+
+.current {
+    color: var(--color-text-default);
+    font-weight: var(--font-semibold);
+}

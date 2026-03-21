@@ -1,0 +1,14 @@
+.label {
+    font-family: var(--font-sans);
+    font-size: var(--text-sm);
+    font-weight: var(--font-medium);
+    color: var(--color-text-default);
+    display: block;
+    margin-bottom: var(--space-4);
+    cursor: pointer;
+}
+
+.required {
+    color: var(--color-error);
+    margin-left: var(--space-4);
+}

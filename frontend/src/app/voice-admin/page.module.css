@@ -1,0 +1,909 @@
+/* ============================================
+   VOICE ADMIN DASHBOARD
+   Internal analytics & ops dashboard
+   ============================================ */
+
+/* Page wrapper */
+.adminPage {
+    min-height: calc(100vh - var(--navbar-height));
+    padding: 32px 24px 80px;
+    max-width: 1380px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* ============================================
+   HEADER
+   ============================================ */
+.header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 24px;
+    margin-bottom: 36px;
+    flex-wrap: wrap;
+}
+
+.headerLeft {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.adminBadge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(255, 106, 0, 0.12);
+    border: 1px solid rgba(255, 106, 0, 0.25);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--orange);
+    width: fit-content;
+}
+
+.adminBadgeDot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--orange);
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.pageTitle {
+    font-size: clamp(22px, 3vw, 30px);
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin: 0;
+}
+
+.pageSubtitle {
+    font-size: 14px;
+    color: var(--muted);
+    margin: 0;
+}
+
+/* Period selector */
+.periodSelector {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--card2);
+    border: 1px solid var(--cardBorder);
+    border-radius: 12px;
+    padding: 5px;
+    align-self: flex-start;
+    flex-wrap: wrap;
+}
+
+.periodPill {
+    padding: 6px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    cursor: pointer;
+    border: none;
+    background: transparent;
+    transition: background 0.18s, color 0.18s, transform 0.14s;
+    font-family: inherit;
+}
+
+.periodPill:hover {
+    background: var(--btnHover);
+    color: var(--text);
+}
+
+.periodPillActive {
+    background: linear-gradient(135deg, rgba(255, 106, 0, 0.22), rgba(255, 138, 31, 0.14));
+    border: 1px solid rgba(255, 106, 0, 0.28);
+    color: var(--text);
+}
+
+/* ============================================
+   SECTION LABELS
+   ============================================ */
+.sectionLabel {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.sectionLabelText {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted2);
+    white-space: nowrap;
+}
+
+.sectionLabelLine {
+    flex: 1;
+    height: 1px;
+    background: var(--line);
+}
+
+/* ============================================
+   KPI CARDS
+   ============================================ */
+.kpiGrid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    margin-bottom: 32px;
+}
+
+.kpiCard {
+    background: var(--card);
+    border: 1px solid var(--cardBorder);
+    border-radius: 16px;
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.18s, background 0.18s, transform 0.16s;
+    position: relative;
+    overflow: hidden;
+}
+
+.kpiCard:hover {
+    border-color: rgba(255, 106, 0, 0.18);
+    background: var(--surfaceBgHover);
+    transform: translateY(-2px);
+}
+
+.kpiCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, rgba(255, 106, 0, 0.18), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.kpiCard:hover::before {
+    opacity: 1;
+}
+
+.kpiIconRow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.kpiIcon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(255, 106, 0, 0.10);
+    border: 1px solid rgba(255, 106, 0, 0.14);
+    display: grid;
+    place-items: center;
+    font-size: 15px;
+}
+
+.kpiLabel {
+    font-size: 11px;
+    color: var(--muted2);
+    font-weight: 500;
+    letter-spacing: 0.02em;
+}
+
+.kpiValue {
+    font-size: clamp(18px, 2.5vw, 26px);
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin: 0;
+    line-height: 1;
+}
+
+.kpiValueSuccess {
+    color: var(--color-success, #22c55e);
+}
+
+.kpiValueWarning {
+    color: var(--color-warning, #f59e0b);
+}
+
+.kpiValueBrand {
+    color: var(--orange);
+}
+
+.delta {
+    font-size: 11px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.deltaUp {
+    color: #22c55e;
+}
+
+.deltaDown {
+    color: #ef4444;
+}
+
+/* ============================================
+   CHARTS SECTION
+   ============================================ */
+.chartsRow {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 14px;
+    margin-bottom: 32px;
+}
+
+.chartCard {
+    background: var(--card);
+    border: 1px solid var(--cardBorder);
+    border-radius: 18px;
+    padding: 22px 24px;
+}
+
+.chartTitle {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chartMeta {
+    font-size: 11px;
+    color: var(--muted2);
+}
+
+/* Animated bar chart */
+.barChartWrap {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 120px;
+}
+
+.barCol {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    height: 100%;
+}
+
+.barContainer {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: flex-end;
+    border-radius: 4px 4px 0 0;
+    overflow: hidden;
+}
+
+.bar {
+    width: 100%;
+    height: 0%;
+    background: linear-gradient(180deg, rgba(255, 138, 31, 0.7), rgba(255, 106, 0, 0.45));
+    border-radius: 4px 4px 0 0;
+    transition: none;
+    position: relative;
+}
+
+.barAnimated {
+    animation: growBar 0.55s cubic-bezier(0.34, 1.38, 0.64, 1) forwards;
+    animation-delay: var(--bar-delay, 0s);
+}
+
+.barLabel {
+    font-size: 10px;
+    color: var(--muted2);
+    text-align: center;
+    white-space: nowrap;
+}
+
+/* Donut / mini chart for status split */
+.donutWrap {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    justify-content: center;
+    height: 100%;
+}
+
+.statusBar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.statusBarHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.statusBarLabel {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.statusBarValue {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.statusBarTrack {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.statusBarFill {
+    height: 100%;
+    border-radius: 999px;
+    width: 0%;
+    transition: width 0.8s cubic-bezier(0.34, 1.1, 0.64, 1);
+    animation-delay: var(--fill-delay, 0s);
+}
+
+.statusBarFillAnimated {
+    width: var(--fill-width, 0%);
+}
+
+.fillGreen { background: linear-gradient(90deg, #16a34a, #22c55e); }
+.fillOrange { background: linear-gradient(90deg, var(--orange), var(--orange2)); }
+.fillRed { background: linear-gradient(90deg, #dc2626, #ef4444); }
+.fillBlue { background: linear-gradient(90deg, #2563eb, #3b82f6); }
+
+/* ============================================
+   USAGE BREAKDOWN (LLM / STT / TTS)
+   ============================================ */
+.usageRow {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin-bottom: 32px;
+}
+
+.usageCard {
+    background: var(--card);
+    border: 1px solid var(--cardBorder);
+    border-radius: 18px;
+    padding: 22px 24px;
+}
+
+.usageCardTitle {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted2);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.usageCardIcon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: rgba(255, 106, 0, 0.10);
+    display: grid;
+    place-items: center;
+    font-size: 13px;
+}
+
+.usageRow2 {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.usageItem {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.usageItemHeader {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.usageItemName {
+    font-size: 13px;
+    color: var(--text);
+    font-weight: 450;
+}
+
+.usageItemCost {
+    font-size: 13px;
+    color: var(--orange);
+    font-weight: 600;
+}
+
+.usageTrack {
+    height: 5px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.usageFill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 106, 0, 0.5), rgba(255, 138, 31, 0.7));
+    width: var(--usage-width, 0%);
+}
+
+.usageDivider {
+    margin: 12px 0;
+    border: none;
+    border-top: 1px solid var(--line);
+}
+
+.usageTotal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-top: 4px;
+}
+
+.usageTotalLabel {
+    font-size: 12px;
+    color: var(--muted2);
+    font-weight: 500;
+}
+
+.usageTotalValue {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+}
+
+/* ============================================
+   CALL LOGS TABLE
+   ============================================ */
+.tableSection {
+    background: var(--card);
+    border: 1px solid var(--cardBorder);
+    border-radius: 18px;
+    overflow: hidden;
+    margin-bottom: 32px;
+}
+
+.tableSectionHeader {
+    padding: 20px 24px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--line);
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.tableSectionTitle {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.tableFilterRow {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+}
+
+.filterPill {
+    padding: 5px 10px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--muted);
+    background: var(--card2);
+    border: 1px solid var(--cardBorder);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    font-family: inherit;
+}
+
+.filterPill:hover {
+    color: var(--text);
+    background: var(--btnHover);
+}
+
+.filterPillActive {
+    color: var(--orange);
+    border-color: rgba(255, 106, 0, 0.22);
+    background: rgba(255, 106, 0, 0.08);
+}
+
+.tableWrap {
+    overflow-x: auto;
+}
+
+.callTable {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 720px;
+}
+
+.callTable th {
+    padding: 10px 20px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted2);
+    border-bottom: 1px solid var(--line);
+    background: var(--card2);
+    white-space: nowrap;
+}
+
+.callTable td {
+    padding: 13px 20px;
+    font-size: 13px;
+    color: var(--text);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    vertical-align: middle;
+}
+
+.callTable tr:last-child td {
+    border-bottom: none;
+}
+
+.callTable tr:hover td {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.callId {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--muted2);
+}
+
+.agentName {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.agentAvatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    background: rgba(255, 106, 0, 0.10);
+    border: 1px solid rgba(255, 106, 0, 0.15);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    flex-shrink: 0;
+}
+
+.recordingLink {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    color: var(--orange);
+    font-size: 12px;
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+
+.recordingLink:hover {
+    opacity: 0.8;
+}
+
+.tableFooter {
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--line);
+    font-size: 12px;
+    color: var(--muted2);
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.tablePagination {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.pageBtn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    background: transparent;
+    border: 1px solid var(--cardBorder);
+    color: var(--muted);
+    font-size: 12px;
+    cursor: pointer;
+    display: grid;
+    place-items: center;
+    transition: background 0.15s, color 0.15s;
+    font-family: inherit;
+}
+
+.pageBtn:hover {
+    background: var(--btnHover);
+    color: var(--text);
+}
+
+.pageBtnActive {
+    background: rgba(255, 106, 0, 0.12);
+    border-color: rgba(255, 106, 0, 0.25);
+    color: var(--orange);
+}
+
+/* ============================================
+   BOTTOM ROW: Recordings + Infrastructure
+   ============================================ */
+.bottomRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    margin-bottom: 32px;
+}
+
+.bottomCard {
+    background: var(--card);
+    border: 1px solid var(--cardBorder);
+    border-radius: 18px;
+    padding: 22px 24px;
+}
+
+.bottomCardTitle {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* Recordings */
+.recordingStats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.recStat {
+    background: var(--card2);
+    border: 1px solid var(--cardBorder);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.recStatLabel {
+    font-size: 11px;
+    color: var(--muted2);
+}
+
+.recStatValue {
+    font-size: 18px;
+    font-weight: 300;
+    letter-spacing: -0.02em;
+    color: var(--text);
+}
+
+.recStatNote {
+    font-size: 11px;
+    color: var(--muted2);
+}
+
+.storageBar {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 4px;
+}
+
+.storageBarLabel {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.storageTrack {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.07);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.storageFill {
+    height: 100%;
+    width: 34%;
+    background: linear-gradient(90deg, rgba(255, 106, 0, 0.6), rgba(255, 174, 0, 0.8));
+    border-radius: 999px;
+    transition: width 1s cubic-bezier(0.34, 1.1, 0.64, 1);
+}
+
+/* Infrastructure */
+.infraList {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.infraItem {
+    background: var(--card2);
+    border: 1px solid var(--cardBorder);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.infraIcon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--cardBorder);
+    display: grid;
+    place-items: center;
+    font-size: 17px;
+    flex-shrink: 0;
+}
+
+.infraInfo {
+    flex: 1;
+    min-width: 0;
+}
+
+.infraName {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.infraMeta {
+    font-size: 11px;
+    color: var(--muted2);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.statusDot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.statusDotGreen {
+    background: #22c55e;
+    box-shadow: 0 0 6px rgba(34, 197, 94, 0.5);
+    animation: pulse 2.5s ease-in-out infinite;
+}
+
+.statusDotYellow {
+    background: #f59e0b;
+    box-shadow: 0 0 6px rgba(245, 158, 11, 0.5);
+}
+
+.statusDotGrey {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.infraStatusBadge {
+    padding: 3px 8px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+.infraStatusConnected {
+    background: rgba(34, 197, 94, 0.10);
+    border: 1px solid rgba(34, 197, 94, 0.20);
+    color: #22c55e;
+}
+
+.infraStatusPending {
+    background: rgba(245, 158, 11, 0.10);
+    border: 1px solid rgba(245, 158, 11, 0.20);
+    color: #f59e0b;
+}
+
+.infraStatusNotConfigured {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    color: var(--muted2);
+}
+
+/* ============================================
+   ANIMATIONS
+   ============================================ */
+@keyframes growBar {
+    0% { height: 0%; }
+    100% { height: var(--bar-height, 60%); }
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 1200px) {
+    .kpiGrid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 980px) {
+    .chartsRow {
+        grid-template-columns: 1fr;
+    }
+
+    .usageRow {
+        grid-template-columns: 1fr;
+    }
+
+    .bottomRow {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 640px) {
+    .adminPage {
+        padding: 20px 16px 60px;
+    }
+
+    .kpiGrid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .header {
+        flex-direction: column;
+        gap: 16px;
+    }
+
+    .recordingStats {
+        grid-template-columns: 1fr;
+    }
+}

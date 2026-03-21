@@ -1,0 +1,37 @@
+.section {
+    width: 100%;
+}
+
+/* Size variants */
+.size-sm {
+    padding-top: var(--space-32);
+    padding-bottom: var(--space-32);
+}
+
+.size-md {
+    padding-top: var(--space-48);
+    padding-bottom: var(--space-48);
+}
+
+.size-lg {
+    padding-top: var(--space-64);
+    padding-bottom: var(--space-64);
+}
+
+/* Responsive: reduce padding on mobile */
+@media (max-width: 640px) {
+    .size-sm {
+        padding-top: var(--space-24);
+        padding-bottom: var(--space-24);
+    }
+
+    .size-md {
+        padding-top: var(--space-32);
+        padding-bottom: var(--space-32);
+    }
+
+    .size-lg {
+        padding-top: var(--space-48);
+        padding-bottom: var(--space-48);
+    }
+}

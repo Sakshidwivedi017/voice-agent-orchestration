@@ -1,0 +1,3 @@
+@echo off
+echo Starting IMADGEN project...
+npm run dev

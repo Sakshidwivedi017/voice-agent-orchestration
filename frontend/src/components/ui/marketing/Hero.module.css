@@ -1,0 +1,57 @@
+.hero {
+    position: relative;
+    overflow: hidden;
+}
+
+.layout {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-48);
+}
+
+.center .content {
+    text-align: center;
+    margin: 0 auto;
+}
+
+.center .description {
+    margin: 0 auto;
+}
+
+.description {
+    max-width: 640px;
+}
+
+.visual {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.actions {
+    display: flex;
+    gap: var(--space-16);
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.left .actions {
+    justify-content: flex-start;
+}
+
+@media (min-width: 1024px) {
+    .left .layout {
+        flex-direction: row;
+        align-items: center;
+        text-align: left;
+    }
+
+    .left .content {
+        flex: 1;
+    }
+
+    .left .visual {
+        flex: 1;
+    }
+}

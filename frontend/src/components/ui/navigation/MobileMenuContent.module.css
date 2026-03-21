@@ -1,0 +1,158 @@
+.content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+    padding: var(--space-32) var(--space-24);
+    gap: var(--space-32);
+}
+
+:global([data-theme="dark"]) .content {
+    --logoFilter: none;
+}
+
+
+.logoArea {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-12);
+    margin-bottom: var(--space-16);
+}
+
+.logoArea img {
+    height: 48px;
+    width: 48px;
+    object-fit: contain;
+    opacity: 1;
+}
+
+.logoArea :global(.logo-dark) {
+    display: block;
+}
+
+.logoArea :global(.logo-light) {
+    display: none;
+}
+
+:global([data-theme="light"]) .logoArea :global(.logo-dark) {
+    display: none;
+}
+
+:global([data-theme="light"]) .logoArea :global(.logo-light) {
+    display: block;
+}
+
+.logoArea span {
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-default);
+}
+
+.linksStack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    gap: var(--space-8);
+}
+
+.navLink {
+    font-size: 22px;
+    font-weight: 400;
+    color: var(--color-text-muted);
+    padding: var(--space-12) 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+.navLink:hover {
+    color: var(--color-text-default);
+}
+
+.navLink::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 2px;
+    width: 60px;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--color-brand-primary), transparent);
+    transform: translateX(-50%) scaleX(0) !important;
+    opacity: 0 !important;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+    display: block !important;
+}
+
+/* Force hide active state's persistent underline in burger menu */
+.navLink:global(.active)::after {
+    transform: translateX(-50%) scaleX(0) !important;
+    opacity: 0 !important;
+}
+
+.navLink:hover::after {
+    transform: translateX(-50%) scaleX(1) !important;
+    opacity: 1 !important;
+}
+
+/* Ensure Home also follows these rules */
+.navLink:global(.active):hover::after {
+    transform: translateX(-50%) scaleX(1) !important;
+    opacity: 1 !important;
+}
+
+.actions {
+    margin-top: var(--space-16);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.actions :global(.btn) {
+    display: none !important;
+}
+
+.actions :global(.toggle) {
+    all: unset;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 20px;
+    color: var(--color-text-muted);
+    padding: var(--space-12) 0;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-12);
+    transition: color 0.2s ease;
+}
+
+.actions :global(.toggle):hover {
+    color: var(--color-text-default);
+}
+
+.actions :global(.toggle) :global(svg) {
+    width: 20px;
+    height: 20px;
+}
+
+.logoArea :global(.logo-light) {
+    display: none;
+}
+
+:global([data-theme="light"]) .logoArea :global(.logo-dark) {
+    display: none;
+}
+
+:global([data-theme="light"]) .logoArea :global(.logo-light) {
+    display: block;
+}

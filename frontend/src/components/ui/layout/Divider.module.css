@@ -1,0 +1,39 @@
+.divider {
+  display: inline-block;
+  background: linear-gradient(
+    to right,
+    transparent,
+    currentColor,
+    transparent
+  );
+  transition: all 0.3s ease;
+}
+
+.divider.horizontal {
+  width: 100%;
+  height: calc(1px * var(--divider-scale, 1));
+  min-height: 1px;
+}
+
+.divider.vertical {
+  height: 100%;
+  width: calc(1px * var(--divider-scale, 1));
+  min-width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    currentColor,
+    transparent
+  );
+}
+
+/* Responsive scaling - gets thinner on mobile */
+@media (max-width: 768px) {
+  .divider.horizontal {
+    height: calc(0.5px * var(--divider-scale, 1));
+  }
+
+  .divider.vertical {
+    width: calc(0.5px * var(--divider-scale, 1));
+  }
+}

@@ -1,0 +1,7 @@
+.errorText {
+    font-family: var(--font-sans);
+    font-size: var(--text-xs);
+    color: var(--color-error);
+    margin-top: var(--space-4);
+    margin-bottom: 0;
+}

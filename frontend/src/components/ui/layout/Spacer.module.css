@@ -1,0 +1,85 @@
+.spacer {
+    flex-shrink: 0;
+}
+
+.axis-vertical {
+    width: 1px;
+}
+
+.axis-horizontal {
+    height: 1px;
+}
+
+/* Vertical Sizing */
+.axis-vertical.size-2 {
+    height: var(--space-2);
+}
+
+.axis-vertical.size-4 {
+    height: var(--space-4);
+}
+
+.axis-vertical.size-8 {
+    height: var(--space-8);
+}
+
+.axis-vertical.size-12 {
+    height: var(--space-12);
+}
+
+.axis-vertical.size-16 {
+    height: var(--space-16);
+}
+
+.axis-vertical.size-24 {
+    height: var(--space-24);
+}
+
+.axis-vertical.size-32 {
+    height: var(--space-32);
+}
+
+.axis-vertical.size-48 {
+    height: var(--space-48);
+}
+
+.axis-vertical.size-64 {
+    height: var(--space-64);
+}
+
+/* Horizontal Sizing */
+.axis-horizontal.size-2 {
+    width: var(--space-2);
+}
+
+.axis-horizontal.size-4 {
+    width: var(--space-4);
+}
+
+.axis-horizontal.size-8 {
+    width: var(--space-8);
+}
+
+.axis-horizontal.size-12 {
+    width: var(--space-12);
+}
+
+.axis-horizontal.size-16 {
+    width: var(--space-16);
+}
+
+.axis-horizontal.size-24 {
+    width: var(--space-24);
+}
+
+.axis-horizontal.size-32 {
+    width: var(--space-32);
+}
+
+.axis-horizontal.size-48 {
+    width: var(--space-48);
+}
+
+.axis-horizontal.size-64 {
+    width: var(--space-64);
+}

@@ -1,0 +1,40 @@
+.statCard {
+    text-align: center;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.statCard:hover {
+    transform: translateY(-2px);
+}
+
+.label {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 500;
+}
+
+.value {
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.note {
+    opacity: 0.7;
+}
+
+/* Variant color accents */
+.variant-success .value {
+    color: var(--color-success);
+}
+
+.variant-warning .value {
+    color: var(--color-warning);
+}
+
+.variant-danger .value {
+    color: var(--color-error);
+}
+
+.variant-neutral .value {
+    color: var(--color-brand-primary);
+}

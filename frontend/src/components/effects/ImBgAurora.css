@@ -1,0 +1,77 @@
+.im-bg {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    background-color: var(--color-bg-base, #050505);
+    overflow: hidden;
+    pointer-events: none;
+}
+
+.im-bghaze {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at 50% 50%, rgba(255, 106, 0, 0.05), transparent 70%);
+}
+
+.im-bgblob {
+    position: absolute;
+    filter: blur(80px);
+    border-radius: 50%;
+    opacity: 0.6;
+    animation: aurora-move 20s infinite alternate ease-in-out;
+}
+
+.im-bgblob--a {
+    width: 60vw;
+    height: 60vh;
+    background: radial-gradient(circle, rgba(255, 106, 0, 0.15), transparent 60%);
+    top: -20vh;
+    left: -20vw;
+    animation-delay: 0s;
+}
+
+.im-bgblob--b {
+    width: 50vw;
+    height: 50vh;
+    background: radial-gradient(circle, rgba(255, 138, 31, 0.12), transparent 60%);
+    bottom: -10vh;
+    right: -10vw;
+    animation-delay: -5s;
+    animation-duration: 25s;
+}
+
+.im-bgblob--c {
+    width: 40vw;
+    height: 40vh;
+    background: radial-gradient(circle, rgba(255, 174, 0, 0.08), transparent 60%);
+    top: 40vh;
+    left: 30vw;
+    animation-delay: -10s;
+    animation-duration: 30s;
+}
+
+.im-bggraindiv {
+    position: absolute;
+    inset: 0;
+    opacity: 0.15;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    mix-blend-mode: overlay;
+}
+
+@keyframes aurora-move {
+    0% {
+        transform: translate(0, 0) scale(1);
+    }
+
+    33% {
+        transform: translate(10vw, 5vh) scale(1.1);
+    }
+
+    66% {
+        transform: translate(-5vw, 15vh) scale(0.9);
+    }
+
+    100% {
+        transform: translate(0, 0) scale(1);
+    }
+}

@@ -1,0 +1,110 @@
+.navbar {
+    height: var(--navbar-height);
+    background: var(--navbar-bg, rgba(5, 5, 5, 0.85));
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--color-border-default);
+    display: flex;
+    align-items: center;
+    z-index: var(--z-navbar);
+    width: 100%;
+    transition: all 0.3s ease;
+}
+
+.sticky {
+    position: fixed;
+    top: 0;
+    left: 0;
+}
+
+.container {
+    padding: var(--space-16) var(--space-32);
+    width: 100%;
+    height: 100%;
+}
+
+.flex {
+    height: 100%;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+}
+
+.brand :global(.logo-light) {
+    display: none;
+}
+
+:global([data-theme="light"]) .brand :global(.logo-dark) {
+    display: none;
+}
+
+:global([data-theme="light"]) .brand :global(.logo-light) {
+    display: block;
+}
+
+.desktopNav {
+    display: none;
+}
+
+.rightSection {
+    display: flex;
+    align-items: center;
+    gap: var(--space-32);
+}
+
+.actions {
+    display: none;
+}
+
+.mobileNav {
+    display: block;
+}
+
+.burger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px;
+    z-index: calc(var(--z-modal) + 1);
+    color: var(--color-text-default);
+}
+
+.burger svg {
+    display: block;
+    width: 28px;
+    height: 28px;
+    color: var(--color-text-default);
+/* removed invalid extra closing brace */
+}
+
+.burger span {
+    display: block;
+    width: 28px;
+    height: 2px;
+    background: var(--color-text-default);
+    transition: 0.3s;
+}
+
+@media (min-width: 1024px) {
+    .desktopNav {
+        display: block;
+    }
+
+    .actions {
+        display: flex;
+        align-items: center;
+        gap: var(--space-16);
+    }
+
+    .mobileNav {
+        display: none;
+    }
+
+    .container {
+        padding: var(--space-16) var(--space-80);
+    }
+}

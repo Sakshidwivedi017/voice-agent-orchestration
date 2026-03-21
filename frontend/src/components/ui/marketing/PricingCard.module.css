@@ -1,0 +1,47 @@
+.card {
+    height: 100%;
+}
+
+.featured {
+    border-color: var(--color-brand-primary);
+    background: rgba(255, 106, 0, 0.02);
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.priceContainer {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+}
+
+.price {
+    font-family: var(--font-sans);
+    font-size: 36px;
+    font-weight: var(--font-bold);
+    color: var(--color-text-default);
+}
+
+.frequency {
+    color: var(--color-text-muted);
+    font-size: var(--text-md);
+}
+
+.feature {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+}
+
+.check {
+    color: var(--color-success);
+    flex-shrink: 0;
+}
+
+.action {
+    margin-top: auto;
+}

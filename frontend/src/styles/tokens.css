@@ -1,0 +1,213 @@
+/**
+ * Design System Tokens
+ * 
+ * This file defines the foundational CSS variables (tokens) for the design system.
+ * All components should reference these tokens rather than hardcoded values.
+ * 
+ * Organization:
+ * - Colors (light & dark themes)
+ * - Spacing scale
+ * - Border radius
+ * - Shadows
+ * - Z-index layers
+ * - Typography
+ * - Breakpoints (reference only)
+ */
+
+:root {
+  /* ============================================
+     COLOR TOKENS - Dark Theme (Default)
+     ============================================ */
+
+  /* Backgrounds */
+  --color-bg-base: #050505;
+  --color-bg-surface: rgba(255, 255, 255, 0.05);
+  --color-bg-surface-hover: rgba(255, 255, 255, 0.07);
+  --color-bg-surface-subtle: rgba(255, 255, 255, 0.04);
+  --color-bg-code: rgba(255, 255, 255, 0.08);
+  --navbar-bg: rgba(5, 5, 5, 0.85);
+
+  /* Text */
+  --color-text-default: rgba(255, 255, 255, 0.92);
+  --color-text-muted: rgba(255, 255, 255, 0.68);
+  --color-text-subtle: rgba(255, 255, 255, 0.52);
+  --color-text-inverted: rgba(10, 10, 10, 0.92);
+
+  /* Brand colors */
+  --color-brand-primary: #ff6a00;
+  --color-brand-primary-hover: #ff8a1f;
+  --color-brand-secondary: #ff8a1f;
+  --color-brand-accent: #ffae00;
+
+  /* Semantic colors */
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+  --color-info: var(--color-brand-accent);
+
+  /* Borders */
+  --color-border-default: rgba(255, 255, 255, 0.12);
+  --color-border-hover: rgba(255, 255, 255, 0.16);
+  --color-border-subtle: rgba(255, 255, 255, 0.08);
+
+  /* Focus ring */
+  --color-focus-ring: rgba(255, 106, 0, 0.4);
+
+  /* ============================================
+     SPACING SCALE (8px base)
+     ============================================ */
+  --space-2: 0.125rem;
+  /* 2px */
+  --space-4: 0.25rem;
+  /* 4px */
+  --space-8: 0.5rem;
+  /* 8px */
+  --space-12: 0.75rem;
+  /* 12px */
+  --space-16: 1rem;
+  /* 16px */
+  --space-24: 1.5rem;
+  /* 24px */
+  --space-32: 2rem;
+  /* 32px */
+  --space-48: 3rem;
+  /* 48px */
+  --space-64: 4rem;
+  /* 64px */
+
+  /* ============================================
+     BORDER RADIUS
+     ============================================ */
+  --radius-sm: 0.25rem;
+  /* 4px */
+  --radius-md: 0.5rem;
+  /* 8px */
+  --radius-lg: 1rem;
+  /* 16px */
+  --radius-full: 9999px;
+
+  /* ============================================
+     SHADOWS
+     ============================================ */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.25), 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.35), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.45), 0 4px 6px -2px rgba(0, 0, 0, 0.25);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.3);
+
+  /* Focus shadow */
+  --shadow-focus: 0 0 0 3px var(--color-focus-ring);
+
+  /* ============================================
+     Z-INDEX SCALE
+     ============================================ */
+  --z-base: 0;
+  --z-background: -1;
+  --z-popover: 300;
+  --z-tooltip: 400;
+  --z-navbar: 1000;
+  --z-sticky: 1000;
+  --z-modal: 1100;
+  --z-toast: 1200;
+
+  /* ============================================
+     LAYOUT TOKENS
+     ============================================ */
+  --navbar-height: 67px;
+  --sidebar-width: 0px;
+
+  /* ============================================
+     TYPOGRAPHY
+     ============================================ */
+
+  /* Font families */
+  --font-sans: var(--font-montserrat), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+
+  /* Font sizes */
+  --text-xs: 0.75rem;
+  /* 12px */
+  --text-sm: 0.875rem;
+  /* 14px */
+  --text-md: 1rem;
+  /* 16px */
+  --text-lg: 1.125rem;
+  /* 18px */
+  --text-xl: 1.25rem;
+  /* 20px */
+
+  /* Heading sizes (responsive) */
+  --heading-sm: clamp(0.875rem, 0.8rem + 0.4vw, 1rem);
+  /* 14-16px */
+  --heading-md: clamp(1.125rem, 1rem + 0.6vw, 1.5rem);
+  /* 18-24px */
+  --heading-lg: clamp(1.5rem, 1.3rem + 1vw, 2rem);
+  /* 24-32px */
+  --heading-xl: clamp(2rem, 1.7rem + 1.5vw, 3rem);
+  /* 32-48px */
+  --heading-xxl: clamp(2.5rem, 2rem + 2.5vw, 4rem);
+  /* 40-64px */
+  --heading-display: clamp(3rem, 2.5rem + 3vw, 5rem);
+  /* 48-80px */
+
+  /* Font weights */
+  --font-light: 350;
+  --font-normal: 400;
+  --font-medium: 425;
+  --font-semibold: 450;
+  --font-bold: 500;
+
+  /* Line heights */
+  --leading-tight: 1.1;
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.625;
+  --leading-loose: 2;
+
+  /* Letter spacing */
+  --tracking-tight: -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.025em;
+
+  /* ============================================
+     BREAKPOINTS (reference only)
+     Note: Use in @media queries, not directly in CSS
+     ============================================ */
+  --breakpoint-sm: 40rem;
+  /* 640px */
+  --breakpoint-md: 48rem;
+  /* 768px */
+  --breakpoint-lg: 64rem;
+  /* 1024px */
+  --breakpoint-xl: 80rem;
+  /* 1280px */
+}
+
+/* ============================================
+   LIGHT THEME
+   ============================================ */
+[data-theme="light"] {
+  /* Backgrounds */
+  --color-bg-base: #fbf7f3;
+  --color-bg-surface: rgba(255, 255, 255, 0.70);
+  --color-bg-surface-hover: rgba(255, 255, 255, 0.85);
+  --color-bg-surface-subtle: rgba(255, 255, 255, 0.55);
+  --color-bg-code: rgba(10, 10, 10, 0.06);
+  --navbar-bg: rgba(244, 230, 221, 0.85);
+
+  /* Text */
+  --color-text-default: rgba(10, 10, 10, 0.92);
+  --color-text-muted: rgba(10, 10, 10, 0.62);
+  --color-text-subtle: rgba(10, 10, 10, 0.48);
+  --color-text-inverted: rgba(255, 255, 255, 0.92);
+
+  /* Borders */
+  --color-border-default: rgba(10, 10, 10, 0.12);
+  --color-border-hover: rgba(10, 10, 10, 0.20);
+  --color-border-subtle: rgba(10, 10, 10, 0.08);
+
+  /* Shadows (softer in light mode) */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.12), 0 1px 3px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.15), 0 2px 4px -1px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.18), 0 4px 6px -2px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.20), 0 10px 10px -5px rgba(0, 0, 0, 0.15);
+}

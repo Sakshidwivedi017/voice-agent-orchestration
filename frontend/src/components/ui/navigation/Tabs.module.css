@@ -1,0 +1,62 @@
+.list {
+    display: flex;
+    gap: var(--space-4);
+    border-bottom: 1px solid var(--color-border-default);
+    margin-bottom: var(--space-24);
+}
+
+.trigger {
+    padding: var(--space-12) var(--space-16);
+    border: none;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-family: var(--font-sans);
+    font-size: var(--text-md);
+    font-weight: var(--font-medium);
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.2s ease, border-color 0.2s ease;
+    position: relative;
+}
+
+.trigger:hover {
+    color: var(--color-text-default);
+}
+
+.trigger[data-state='active'] {
+    color: var(--color-brand-primary);
+    border-bottom-color: var(--color-brand-primary);
+}
+
+.trigger:focus-visible {
+    outline: 2px solid var(--color-brand-primary);
+    outline-offset: 4px;
+    border-radius: var(--radius-sm);
+}
+
+.content {
+    animation: fadeIn 0.2s ease-out;
+}
+
+.content:focus {
+    outline: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .content {
+        animation: none;
+    }
+}

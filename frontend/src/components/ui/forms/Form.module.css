@@ -1,0 +1,67 @@
+.form {
+    border-radius: var(--radius2);
+    background: var(--card);
+    border: 1px solid var(--cardBorder);
+    box-shadow: var(--shadow);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+    overflow: hidden;
+}
+
+.form:before {
+    content: "";
+    position: absolute;
+    inset: -60px;
+    background:
+        radial-gradient(420px 260px at var(--mx) var(--my), rgba(255, 106, 0, .12), transparent 62%),
+        radial-gradient(240px 240px at 85% 70%, rgba(255, 138, 31, .08), transparent 58%);
+    filter: blur(18px);
+    opacity: .9;
+    pointer-events: none;
+    transform: translate(calc(var(--mxpx) * .02), calc(var(--mypx) * .02));
+}
+
+.form > * {
+    position: relative;
+    z-index: 1;
+}
+
+.form textarea,
+.form input {
+    width: 100%;
+    font-family: inherit;
+    color: var(--text);
+    background: var(--btnBg);
+    border: 1px solid var(--btnBorder);
+    border-radius: 20px;
+    padding: 16px 16px;
+    outline: none;
+    transition: border-color .2s ease, background .2s ease;
+}
+
+.form textarea {
+    min-height: 112px;
+    resize: vertical;
+    padding-top: 18px;
+}
+
+.form textarea::placeholder,
+.form input::placeholder {
+    color: var(--muted2);
+    font-weight: 400;
+}
+
+.form textarea:focus,
+.form input:focus {
+    border-color: var(--orange);
+    background: var(--btnHover);
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 2px;
+}

@@ -1,0 +1,348 @@
+.container {
+    min-height: 400px;
+    height: 650px;
+    max-width: 800px;
+    width: 100%;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--surfaceBg) !important;
+    backdrop-filter: blur(32px);
+    border: 1px solid var(--surfaceBorder) !important;
+    border-radius: var(--surfaceRadius) !important;
+    box-shadow: var(--surfaceShadow);
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+}
+
+/* Variants */
+.compact {
+    height: 500px;
+    max-width: 600px;
+}
+
+.minimal {
+    min-height: unset !important;
+    height: auto !important;
+    max-height: none !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none;
+    padding: 0;
+    overflow: visible;
+}
+
+.minimal .header,
+.minimal .messagesArea {
+    display: none;
+}
+
+.minimal .inputArea {
+    background: transparent;
+    padding: 0;
+}
+
+.minimal .inputArea::before {
+    display: none;
+}
+
+.fullPage {
+    height: 100% !important;
+    /* Force fill container */
+    /* Fill container */
+    max-width: 1400px;
+    /* Match content width */
+    margin: 0 auto;
+    border-radius: var(--surfaceRadius) !important;
+    border: 1px solid var(--surfaceBorder) !important;
+}
+
+.header {
+    padding: var(--space-24) var(--space-32);
+    position: relative;
+    background: rgba(255, 255, 255, 0.01);
+}
+
+/* Rich line effect for the header separator */
+.header::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--richLine);
+    opacity: 0.5;
+}
+
+.statusDot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--color-success);
+    box-shadow: 0 0 14px var(--color-success);
+}
+
+.messagesArea {
+    flex: 1;
+    overflow-y: auto;
+    padding: var(--space-32);
+    scroll-behavior: smooth;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-24);
+}
+
+/* Custom Scrollbar */
+.messagesArea::-webkit-scrollbar {
+    width: 6px;
+}
+
+.messagesArea::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.messagesArea::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+}
+
+.messageWrapper {
+    display: flex;
+    flex-direction: column;
+    max-width: 80%;
+}
+
+.userWrapper {
+    align-self: flex-end;
+    align-items: flex-end;
+}
+
+.assistantWrapper {
+    align-self: flex-start;
+    align-items: flex-start;
+}
+
+.bubble {
+    padding: 14px 22px;
+    border-radius: 20px;
+    line-height: 1.6;
+    font-size: var(--text-md);
+    min-width: 80px;
+}
+
+.userBubble {
+    background: linear-gradient(135deg, var(--color-brand-primary), var(--color-brand-secondary));
+    color: white;
+    border-bottom-right-radius: 4px;
+    box-shadow: 0 8px 20px rgba(255, 106, 0, 0.2);
+}
+
+.assistantBubble {
+    background: var(--color-bg-surface-subtle);
+    color: var(--color-text-default);
+    border: 1px solid var(--color-border-subtle);
+    border-bottom-left-radius: 4px;
+}
+
+.timestamp {
+    margin-top: 8px;
+    font-size: 11px !important;
+    color: var(--color-text-subtle);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.inputArea {
+    padding: var(--space-24) var(--space-32);
+    background: rgba(255, 255, 255, 0.015);
+    position: relative;
+    z-index: 10;
+}
+
+/* Rich line effect for the input separator */
+.inputArea::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--richLine);
+    opacity: 0.3;
+}
+
+/* Premium Input Styles Ported from ChatBox.tsx */
+.premiumWrapper {
+    width: 100%;
+    max-width: 950px;
+    margin: 0 auto;
+    position: relative;
+    padding: 3px;
+    border-radius: 999px;
+    background: var(--surfaceBg);
+    backdrop-filter: blur(36px);
+    border: 1px solid var(--surfaceBorder);
+    box-shadow: var(--shadow-xl);
+    transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.premiumWrapper:focus-within {
+    border-color: rgba(255, 106, 0, 0.5);
+    transform: translateY(-4px) scale(1.01);
+    box-shadow:
+        0 30px 60px rgba(0, 0, 0, 0.6),
+        0 0 40px rgba(255, 106, 0, 0.1);
+}
+
+.premiumContainer {
+    display: flex;
+    align-items: center;
+    gap: var(--space-12);
+    padding: 8px 8px 8px 18px;
+    height: 64px;
+}
+
+.premiumInput {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: var(--text-lg);
+    font-weight: var(--font-medium);
+    outline: none;
+    letter-spacing: var(--tracking-tight);
+}
+
+.premiumInput::placeholder {
+    color: var(--muted2);
+    font-weight: var(--font-light);
+}
+
+.premiumSendButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    color: var(--color-brand-primary);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    cursor: pointer;
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    flex-shrink: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.premiumSendButton:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1) rotate(-8deg);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+    color: var(--color-brand-primary-hover);
+}
+
+.premiumSendButton:active:not(:disabled) {
+    transform: scale(0.95);
+}
+
+.premiumSendButton:disabled {
+    background: rgba(255, 255, 255, 0.02);
+    border-color: rgba(255, 255, 255, 0.05);
+    color: var(--muted2);
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.premiumIcon {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0 8px rgba(255, 106, 0, 0.3));
+}
+
+.premiumGlow {
+    position: absolute;
+    inset: -2px;
+    background: linear-gradient(90deg,
+            transparent,
+            rgba(255, 106, 0, 0.2),
+            rgba(255, 174, 0, 0.1),
+            transparent);
+    background-size: 200% 100%;
+    border-radius: 999px;
+    z-index: -1;
+    opacity: 0;
+    filter: blur(12px);
+    transition: opacity 0.8s ease;
+}
+
+.premiumWrapper:focus-within .premiumGlow {
+    opacity: 1;
+    animation: gradientMove 5s infinite linear;
+}
+
+@keyframes gradientMove {
+    0% {
+        background-position: -200% 0;
+    }
+
+    100% {
+        background-position: 200% 0;
+    }
+}
+
+/* Typing Animation */
+.typing {
+    display: flex;
+    gap: 5px;
+    padding: 14px 20px;
+}
+
+.dot {
+    width: 5px;
+    height: 5px;
+    background: var(--color-brand-primary);
+    border-radius: 50%;
+    animation: bounce 1.4s infinite ease-in-out;
+    opacity: 0.6;
+}
+
+.dot:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.dot:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes bounce {
+
+    0%,
+    80%,
+    100% {
+        transform: scale(0.6);
+        opacity: 0.3;
+    }
+
+    40% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+}
+
+.closeButton {
+    opacity: 0.6;
+    transition: all 0.2s ease;
+}
+
+.closeButton:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.05) !important;
+    transform: rotate(90deg);
+}

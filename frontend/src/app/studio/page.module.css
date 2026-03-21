@@ -1,0 +1,792 @@
+/* =========================
+   STUDIO PAGE (Corrected Layout)
+========================= */
+
+/* --- Hero --- */
+.hero {
+    padding: 32px 0 48px;
+}
+
+.heroTop {
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    padding-bottom: 18px;
+}
+
+.kicker {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: .16em;
+    color: var(--orange);
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.sub {
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.75;
+    max-width: 84ch;
+    font-weight: 400;
+    margin: 14px auto 0;
+}
+
+.heroActions {
+    margin-top: 22px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.dur {
+    opacity: .7;
+    font-weight: 700;
+    margin-left: 6px;
+}
+
+.showreel iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+}
+
+.showreel .meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    border-top: 1px solid color-mix(in srgb, var(--cardBorder) 70%, transparent);
+    color: var(--muted2);
+    font-size: 12px;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+}
+
+.showreel .meta b {
+    color: color-mix(in srgb, var(--text) 76%, var(--muted));
+    font-weight: 800;
+}
+
+/* --- Studio KV --- */
+.studioKv {
+    width: min(720px, 92vw);
+    margin: 18px auto 18px;
+    border-radius: 22px;
+    overflow: hidden;
+    border: 1px solid var(--cardBorder);
+    background: var(--card);
+    box-shadow: var(--shadow);
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .35s ease, transform .35s ease;
+    pointer-events: auto;
+}
+
+.studioKv.isVisible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.studioKv img {
+    width: 100%;
+    height: auto;
+    display: block;
+    object-fit: cover;
+}
+
+/* --- RTB --- */
+.rtb {
+    padding: 18px 0 0;
+}
+
+.rtbStrip {
+    display: flex;
+    overflow: hidden;
+    border-radius: 999px;
+    border: 1px solid var(--cardBorder);
+    background: var(--card);
+    box-shadow: var(--shadow);
+    max-width: 100%;
+    margin: 18px auto 0;
+}
+
+.rtbItem {
+    flex: 1;
+    padding: 16px 18px;
+    text-align: center;
+    position: relative;
+}
+
+.rtbItem:not(:last-child):after {
+    content: "";
+    position: absolute;
+    top: 14px;
+    bottom: 14px;
+    right: 0;
+    width: 1px;
+    background: color-mix(in srgb, var(--cardBorder) 75%, transparent);
+}
+
+.rtbItem b {
+    display: block;
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -.01em;
+    color: var(--text);
+}
+
+.rtbItem span {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.35;
+}
+
+@media (max-width: 900px) {
+    .rtbStrip {
+        border-radius: 26px;
+        flex-direction: column;
+    }
+
+    .rtbItem:not(:last-child):after {
+        left: 18px;
+        right: 18px;
+        top: auto;
+        bottom: 0;
+        height: 1px;
+        width: auto;
+    }
+}
+
+/* --- Sections --- */
+.section {
+    padding: 36px 0 56px
+}
+
+.sectionHead {
+    display: flex;
+    justify-content: center;
+    text-align: center;
+    margin: 8px 0 18px;
+}
+
+/* Note: Add 'underline-effect underline-effect--wide' classes to h2 elements in page.tsx */
+.h2Underlined {
+    margin: 0;
+    font-weight: 300;
+    letter-spacing: -.01em;
+    font-size: 28px;
+    color: var(--muted);
+}
+
+.hint {
+    margin-top: 10px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.65;
+}
+
+/* --- Diff Grid (Production vs Traditional) --- */
+.diffGrid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+.diffCard {
+    border-radius: var(--radius2);
+    background: var(--card);
+    border: 1px solid var(--cardBorder);
+    padding: 24px;
+    text-align: center;
+}
+
+.diffCard h3 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    letter-spacing: .16em;
+    color: var(--orange);
+    text-transform: uppercase;
+}
+
+.diffCard p {
+    color: var(--muted);
+    font-size: 14px;
+    line-height: 1.6;
+    margin: 0;
+}
+
+@media (max-width: 800px) {
+    .diffGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* --- Capabilities Grid --- */
+.capGrid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 14px;
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+.cap {
+    grid-column: span 12;
+    border-radius: var(--radius2);
+    background: var(--card);
+    border: 1px solid var(--cardBorder);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.cap:before {
+    content: "";
+    position: absolute;
+    inset: -70px;
+    background: radial-gradient(520px 340px at var(--mx) var(--my), rgba(255, 106, 0, .14), transparent 62%);
+    filter: blur(18px);
+    opacity: .55;
+    pointer-events: none;
+    transform: translate(calc(var(--mxpx) * .02), calc(var(--mypx) * .02));
+}
+
+.cap>* {
+    position: relative;
+    z-index: 1
+}
+
+/* --- Layout Logic (Split) --- */
+.capSplit .capBody {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    height: 100%;
+    min-height: 420px;
+}
+
+.capCopy {
+    border-right: 1px solid var(--line);
+    background: var(--btnBg);
+    display: flex;
+    flex-direction: column;
+}
+
+.capHead {
+    padding: 24px 24px 18px;
+    flex: 1;
+}
+
+.capEyebrow {
+    font-size: 11px;
+    letter-spacing: .2em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 12px;
+    font-weight: 600;
+}
+
+.capTitle {
+    font-size: clamp(26px, 3vw, 44px);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.05;
+    margin: 0 0 10px;
+}
+
+.capSub {
+    margin-top: 6px;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1.65;
+    max-width: 40ch;
+}
+
+.capVisuals {
+    position: relative;
+    overflow: hidden;
+    background: var(--btnBg);
+}
+
+/* Modifiers */
+.capAlt .capBody {
+    grid-template-columns: 7fr 5fr;
+}
+
+.capAlt .capCopy {
+    order: 2;
+    border-right: none;
+    border-left: 1px solid color-mix(in srgb, var(--cardBorder) 70%, transparent);
+}
+
+.capAlt .capVisuals {
+    order: 1;
+}
+
+/* Realism/Scale specifics */
+.capRealism .capBody {
+    grid-template-columns: 7fr 5fr;
+}
+
+.capRealism .capVisuals {
+    min-height: 600px;
+    max-height: 600px;
+    height: 600px;
+}
+
+.capScale .capBody {
+    grid-template-columns: 6.5fr 5.5fr;
+}
+
+.capScale .capVisuals {
+    min-height: 600px;
+}
+
+@media (max-width: 980px) {
+
+    .capSplit .capBody,
+    .capAlt .capBody,
+    .capRealism .capBody,
+    .capScale .capBody {
+        grid-template-columns: 1fr;
+    }
+
+    .capCopy {
+        border-right: none;
+        border-left: none;
+        border-bottom: 1px solid var(--cardBorder);
+        order: 0 !important;
+    }
+
+    .capVisuals {
+        order: 1 !important;
+        min-height: 300px !important;
+    }
+}
+
+
+/* --- Carousel --- */
+.carousel {
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.carouselTrack {
+    display: flex;
+    height: 100%;
+    transition: transform .35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.carouselSlide {
+    min-width: 100%;
+    height: 100%;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 12px;
+}
+
+.carouselNav {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    gap: 8px;
+    z-index: 5;
+}
+
+.cbtn {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    border: 1px solid var(--btnBorder);
+    background: var(--btnBg);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 18px;
+    line-height: 0;
+    transition: background .2s;
+}
+
+.cbtn:hover {
+    background: var(--btnHover);
+    color: var(--text);
+}
+
+.carouselDots {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 14px;
+    display: flex;
+    gap: 8px;
+    z-index: 5;
+    padding: 6px 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 99px;
+    backdrop-filter: blur(4px);
+}
+
+.dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, .4);
+    cursor: pointer;
+    transition: background .2s;
+}
+
+.dot.active {
+    background: #fff
+}
+
+
+/* --- Tiles & Media Grids --- */
+.mediaGrid {
+    /* Used when no carousel */
+    height: 100%;
+    padding: 14px;
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 12px;
+}
+
+.tile {
+    grid-column: span 12;
+    border-radius: 18px;
+    overflow: hidden;
+    border: 1px solid var(--cardBorder);
+    background: var(--btnBg);
+    position: relative;
+    min-height: 220px;
+}
+
+.tile img,
+.tile video {
+    width: 100%;
+    height: 100%;
+    display: block;
+    object-fit: cover;
+    object-position: center 40%;
+}
+
+.tile video {
+    background: #000;
+}
+
+.tile .capline {
+    position: absolute;
+    left: 14px;
+    right: 14px;
+    bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .80);
+    text-shadow: 0 4px 12px rgba(0, 0, 0, .6);
+    opacity: .95;
+    z-index: 2;
+}
+
+/* Specific grids */
+.gridIdentity .t1 {
+    grid-column: span 6;
+    min-height: 320px;
+}
+
+.gridIdentity .t2 {
+    grid-column: span 6;
+    min-height: 320px;
+}
+
+.gridIdentity .t3 {
+    grid-column: span 6;
+    min-height: 320px;
+}
+
+.gridIdentity .t4 {
+    grid-column: span 6;
+    min-height: 320px;
+}
+
+.gridRealism .t1,
+.gridRealism .t2 {
+    min-height: 540px;
+}
+
+.gridScale .t1 {
+    grid-column: span 12;
+    min-height: 540px;
+}
+
+.gridScale .t2 {
+    grid-column: span 12;
+    min-height: 540px;
+}
+
+
+/* FAQ */
+.faq {
+    max-width: 100%;
+    margin: 0 auto;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+    border-radius: 0;
+}
+
+.faq details {
+    border-top: 1px solid rgba(255, 255, 255, .12);
+    padding: 0;
+}
+
+.faq details:first-child {
+    border-top: none;
+}
+
+.faq summary {
+    list-style: none;
+    cursor: pointer;
+    padding: 18px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: -.01em;
+    color: var(--text);
+    border-top: 1px solid var(--line);
+}
+
+.faq summary::-webkit-details-marker {
+    display: none
+}
+
+.faq summary .mini {
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--muted2);
+    line-height: 1.45;
+    max-width: 72ch;
+    font-weight: 400;
+}
+
+.faq .chev {
+    flex: 0 0 auto;
+    width: 24px;
+    height: 24px;
+    border: none;
+    background: transparent;
+    display: grid;
+    place-items: center;
+    transition: transform .2s ease;
+    opacity: .7;
+}
+
+.faq .chev:before {
+    content: "+";
+    font-size: 20px;
+    line-height: 1;
+    color: var(--text);
+}
+
+.faq details[open] .chev {
+    transform: rotate(45deg);
+}
+
+
+/* Just IMADGEN */
+.justGrid {
+    max-width: 100%;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: 7fr 5fr;
+    gap: 14px;
+    align-items: stretch;
+}
+
+.justMedia {
+    border-radius: var(--radius2);
+    overflow: hidden;
+    border: 1px solid var(--cardBorder);
+    background: var(--card);
+    min-height: 300px;
+}
+
+.justMedia video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 40%;
+    display: block
+}
+
+.justCopy {
+    border-radius: var(--radius2);
+    border: 1px solid var(--cardBorder);
+    background: var(--card);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    min-height: 300px;
+}
+
+.justCopy .big {
+    font-size: clamp(34px, 4.2vw, 64px);
+    font-weight: 700;
+    letter-spacing: -.02em;
+}
+
+@media (max-width: 980px) {
+    .justGrid {
+        grid-template-columns: 1fr;
+    }
+}
+
+
+/* Modal */
+.srModal {
+    position: fixed;
+    inset: 0;
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(0, 0, 0, .85);
+    backdrop-filter: blur(14px);
+    display: flex;
+}
+
+.srFrame {
+    width: min(980px, 94vw);
+    aspect-ratio: 16/9;
+    border-radius: var(--radius2);
+    overflow: hidden;
+    background: #000;
+    box-shadow:
+        0 30px 90px rgba(0, 0, 0, .65),
+        inset 0 0 0 2px #000;
+    /* Force black perimeter to hide bleed */
+    position: relative;
+    /* Prevent sub-pixel rounding artifacts */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
+}
+
+.srFrame iframe {
+    position: absolute;
+    inset: -2px;
+    /* Increased bleed */
+    width: calc(100% + 4px);
+    height: calc(100% + 4px);
+    border: 0;
+    display: block;
+    background: #000;
+    transform: scale(1.001);
+    /* Subtle scale to force coverage */
+}
+
+.srClose {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, .14);
+    background: rgba(0, 0, 0, .35);
+    color: rgba(255, 255, 255, .9);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+    z-index: 5;
+    transition: background .2s;
+}
+
+.srClose:hover {
+    background: rgba(0, 0, 0, .6);
+}
+
+.srLabel {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    letter-spacing: .22em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .78);
+    background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, .55));
+    z-index: 4;
+}
+
+@media (max-width: 640px) {
+    .srModal {
+        padding: 14px;
+    }
+
+    .srClose {
+        top: 10px;
+        right: 10px;
+    }
+}
+
+.contactFormGlobal {
+    display: grid;
+    gap: 14px;
+}
+
+.contactFormGlobal textarea,
+.contactFormGlobal input {
+    width: 100%;
+    font-family: inherit;
+    font-size: 14px;
+    color: var(--text);
+    background: rgba(255, 255, 255, .04);
+    border: 1px solid rgba(255, 255, 255, .08);
+    border-radius: 14px;
+    padding: 14px 18px;
+    outline: none;
+    transition: border-color .2s ease, background .2s ease, box-shadow .2s ease;
+}
+
+.contactFormGlobal textarea {
+    min-height: 100px;
+    resize: vertical;
+}
+
+.contactFormGlobal textarea::placeholder,
+.contactFormGlobal input::placeholder {
+    color: rgba(255, 255, 255, .35);
+}
+
+.contactFormGlobal textarea:focus,
+.contactFormGlobal input:focus {
+    border-color: var(--orange);
+    background: rgba(255, 255, 255, .06);
+    box-shadow: 0 0 0 3px rgba(255, 106, 0, .12);
+}

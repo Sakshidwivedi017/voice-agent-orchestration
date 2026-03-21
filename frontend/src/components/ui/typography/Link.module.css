@@ -1,0 +1,64 @@
+.link {
+    font-family: var(--font-sans);
+    font-weight: var(--font-medium);
+    transition: color 0.2s ease, text-decoration-color 0.2s ease;
+    cursor: pointer;
+    position: relative;
+}
+
+/* Focus-visible styling */
+.link:focus-visible {
+    outline: 2px solid var(--color-brand-primary);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+}
+
+/* Tone variants */
+.tone-default {
+    color: var(--color-text-default);
+}
+
+.tone-default:hover {
+    color: var(--color-brand-primary);
+}
+
+.tone-brand {
+    color: var(--color-brand-primary);
+}
+
+.tone-brand:hover {
+    color: var(--color-brand-primary-hover);
+}
+
+.tone-muted {
+    color: var(--color-text-muted);
+}
+
+.tone-muted:hover {
+    color: var(--color-text-default);
+}
+
+/* Underline variants */
+.underline-always {
+    text-decoration: underline;
+    text-decoration-color: currentColor;
+    text-underline-offset: 0.2em;
+}
+
+.underline-hover {
+    text-decoration: none;
+}
+
+.underline-hover:hover {
+    text-decoration: underline;
+    text-decoration-color: currentColor;
+    text-underline-offset: 0.2em;
+}
+
+.underline-never {
+    text-decoration: none;
+}
+
+.underline-never:hover {
+    text-decoration: none;
+}

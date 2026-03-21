@@ -1,0 +1,14 @@
+.card {
+    height: 100%;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    border-color: var(--color-brand-primary);
+}
+
+.icon {
+    font-size: 32px;
+    color: var(--color-brand-primary);
+}

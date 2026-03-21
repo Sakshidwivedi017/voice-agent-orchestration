@@ -1,0 +1,26 @@
+.logoCloud {
+    width: 100%;
+}
+
+.title {
+    font-family: var(--font-sans);
+    font-size: var(--text-xs);
+    font-weight: var(--font-semibold);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-widest);
+    text-align: center;
+    margin-bottom: var(--space-32);
+}
+
+.logo {
+    max-height: 48px;
+    filter: grayscale(1) brightness(0.8);
+    opacity: 0.6;
+    transition: all 0.3s ease;
+}
+
+.logo:hover {
+    filter: grayscale(0) brightness(1);
+    opacity: 1;
+}

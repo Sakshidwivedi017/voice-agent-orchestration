@@ -1,0 +1,783 @@
+/* Import design system tokens */
+@import '../styles/tokens.css';
+
+:root {
+    /* Theme (default: dark; light overrides below) */
+    --bg: #050505;
+    --text: rgba(255, 255, 255, .92);
+    --muted: rgba(255, 255, 255, .68);
+    --muted2: rgba(255, 255, 255, .52);
+    --line: rgba(255, 255, 255, .12);
+
+    --card: rgba(255, 255, 255, .05);
+    --card2: rgba(255, 255, 255, .04);
+    --cardBorder: rgba(255, 255, 255, .10);
+
+    --orange: #ff6a00;
+    --orange2: #ff8a1f;
+
+    --shadow: 0 18px 50px rgba(0, 0, 0, .55);
+    --radius: 18px;
+    --radius2: 26px;
+    --max: 1400px;
+
+    /* cursor glow vars */
+    --mx: 50%;
+    --my: 30%;
+    --mxpx: 0px;
+    --mypx: 0px;
+
+    /* brand logo tinting (dark mode = white) */
+    --logoFilter: brightness(0) invert(1) contrast(1.1);
+    --logoOpacity: .92;
+
+    /* background strength */
+    --emberAlpha: .70;
+    --bgVignette: rgba(0, 0, 0, .55);
+
+    /* button surface */
+    --btnBg: rgba(255, 255, 255, .06);
+    --btnBorder: rgba(255, 255, 255, .12);
+    --btnHover: rgba(255, 255, 255, .085);
+
+    /* subtle “rich line” effect */
+    --richLine: linear-gradient(90deg,
+            rgba(255, 106, 0, .00),
+            rgba(255, 106, 0, .22),
+            rgba(255, 138, 31, .18),
+            rgba(255, 106, 0, .00));
+
+    /* Layout primitives */
+    --heroPad: 84px 0 34px;
+    --sectionPad: 34px 0 58px;
+    --gap: 14px;
+
+    --h1Size: clamp(42px, 6.2vw, 74px);
+    --h1Line: 1.02;
+    --h1Weight: 300;
+    --h1Track: -.02em;
+
+    --h2Size: 28px;
+    --h2Line: 1.2;
+    --h2Weight: 300;
+    --h2Track: -.02em;
+
+    --subSize: 15px;
+    --subLine: 1.75;
+    --subMax: 78ch;
+
+    --surfaceBg: var(--card);
+    --surfaceBgHover: rgba(255, 255, 255, .07);
+    --surfaceBorder: var(--cardBorder);
+    --surfaceBorderHover: rgba(255, 255, 255, .16);
+    --surfaceRadius: var(--radius2);
+    --surfaceShadow: var(--shadow);
+
+    --pillBg: rgba(255, 255, 255, .04);
+    --pillBorder: rgba(255, 255, 255, .10);
+    --pillText: rgba(255, 255, 255, .70);
+
+    --marqueeDur: 26s;
+    --marqueeGap: 28px;
+    --brandLogoH: 30px;
+
+    --glowInset: -80px;
+    --glowW: 520px;
+    --glowH: 340px;
+    --glowOpacity: .85;
+    --glowStop: 62%;
+}
+
+/* LIGHT MODE */
+html[data-theme="light"] {
+    --bg: #fbf7f3;
+    --text: rgba(10, 10, 10, .92);
+    --muted: rgba(10, 10, 10, .62);
+    --muted2: rgba(10, 10, 10, .48);
+    --line: rgba(10, 10, 10, .12);
+
+    --card: rgba(255, 255, 255, .70);
+    --card2: rgba(255, 255, 255, .55);
+    --cardBorder: rgba(10, 10, 10, .10);
+
+    --shadow: 0 18px 50px rgba(0, 0, 0, .12);
+
+    /* In light mode, keep logos “inked” (not white) */
+    --logoFilter: none;
+    --logoOpacity: .90;
+
+    /* softer particles */
+    --emberAlpha: .25;
+    --bgVignette: rgba(255, 255, 255, .65);
+
+    --btnBg: rgba(10, 10, 10, .04);
+    --btnBorder: rgba(10, 10, 10, .12);
+    --btnHover: rgba(10, 10, 10, .07);
+
+    --pillBg: rgba(10, 10, 10, .04);
+    --pillBorder: rgba(10, 10, 10, .12);
+    --pillText: rgba(10, 10, 10, .92);
+
+    --richLine: linear-gradient(90deg,
+            rgba(255, 106, 0, .00),
+            rgba(255, 106, 0, .18),
+            rgba(255, 138, 31, .14),
+            rgba(255, 106, 0, .00));
+}
+
+/* Light mode background variant */
+html[data-theme="light"] .bg {
+    background:
+        radial-gradient(1100px 650px at 60% 30%, rgba(255, 106, 0, .10), transparent 60%),
+        radial-gradient(900px 700px at 30% 75%, rgba(255, 138, 31, .08), transparent 58%),
+        linear-gradient(180deg, rgba(255, 255, 255, .0), var(--bgVignette));
+}
+
+/* Light mode brand image tweaks */
+html[data-theme="light"] .corner-logo,
+html[data-theme="light"] .footer-logo {
+    filter: invert(1) hue-rotate(180deg) saturate(0.8) drop-shadow(0 0 14px rgba(255, 106, 0, .10));
+}
+
+/* Base */
+* {
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+html {
+    scrollbar-gutter: stable;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    margin: 0;
+    font-family: var(--font-sans);
+    color: var(--text);
+    background: var(--bg);
+    overflow-x: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding-top: var(--navbar-height);
+}
+
+a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.brand-link {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 700;
+}
+
+.layout-logo {
+    height: 32px;
+}
+
+/* Background layers */
+.bg {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-background, -1);
+    background:
+        radial-gradient(1100px 650px at 60% 30%, rgba(255, 106, 0, .16), transparent 60%),
+        radial-gradient(1000px 800px at 90% 40%, rgba(255, 174, 0, .08), transparent 60%),
+        radial-gradient(900px 700px at 30% 75%, rgba(255, 138, 31, .11), transparent 58%),
+        radial-gradient(900px 700px at 10% 90%, rgba(255, 106, 0, .08), transparent 60%),
+        linear-gradient(180deg, rgba(0, 0, 0, .0), var(--bgVignette));
+    transition: background .25s ease;
+}
+
+html[data-theme="light"] .bg {
+    background:
+        radial-gradient(1100px 650px at 60% 30%, rgba(255, 106, 0, .18), transparent 60%),
+        radial-gradient(950px 700px at 30% 75%, rgba(255, 138, 31, .14), transparent 58%),
+        radial-gradient(900px 480px at 50% 50%, rgba(255, 255, 255, .55), transparent 60%);
+}
+
+/* Cursor-follow ambient glow */
+.bg:after {
+    content: "";
+    position: absolute;
+    inset: -120px;
+    pointer-events: none;
+    background: radial-gradient(640px 420px at var(--mx) var(--my), rgba(255, 106, 0, .12), transparent 62%);
+    filter: blur(22px);
+    opacity: .85;
+    transform: translate(calc(var(--mxpx) * .04), calc(var(--mypx) * .04));
+    transition: opacity .25s ease;
+}
+
+html[data-theme="light"] .bg:after {
+    background: radial-gradient(760px 520px at var(--mx) var(--my), rgba(255, 106, 0, .10), transparent 64%);
+    opacity: .70;
+}
+
+canvas#embers {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-background, -1);
+    opacity: var(--emberAlpha);
+    transition: opacity .25s ease;
+}
+
+.wrap {
+    max-width: var(--max);
+    margin: 0 auto;
+    padding: 0 24px;
+}
+
+/* Theme toggle (subtle) */
+.toggle {
+    padding: 10px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--btnBorder);
+    background: var(--btnBg);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    transition: transform .15s ease, background .2s ease, color .2s ease;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, .12);
+}
+
+.toggle:hover {
+    transform: translateY(-1px);
+    background: var(--btnHover);
+    color: var(--text);
+}
+
+.toggle svg {
+    width: 16px;
+    height: 16px;
+    opacity: .9;
+}
+
+/* =========================
+   FOOTER (STANDARD)
+========================= */
+footer {
+    padding: 18px 0 22px;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+}
+
+html[data-theme="light"] footer {
+    border-top: 1px solid rgba(10, 10, 10, .08);
+    background: #F4E6DD;
+}
+
+.finebar {
+    margin-top: 0px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: var(--muted2);
+    font-size: 12px;
+}
+
+.fine-left {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 240px;
+}
+
+.fine-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 999px;
+    border: 1px solid var(--btnBorder);
+    background: var(--btnBg);
+    display: grid;
+    place-items: center;
+    transition: transform .15s ease, background .2s ease, border-color .2s ease;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, .10);
+}
+
+.icon-btn:hover {
+    transform: translateY(-1px);
+    background: var(--btnHover);
+    border-color: color-mix(in srgb, var(--btnBorder) 60%, rgba(255, 106, 0, .20));
+}
+
+.icon-btn svg {
+    width: 18px;
+    height: 18px;
+    opacity: .86;
+}
+
+.footmark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-left: 10px;
+    border-left: 1px solid var(--line);
+    margin-left: 2px;
+}
+
+.footmark img {
+    width: 22px;
+    height: 22px;
+    object-fit: contain;
+    filter: drop-shadow(0 0 10px rgba(255, 106, 0, .18));
+    opacity: .9;
+}
+
+/* Footer logo swap (dark vs light) */
+.footmark .logo-light {
+    display: none;
+}
+
+[data-theme="light"] .footmark .logo-dark {
+    display: none;
+}
+
+[data-theme="light"] .footmark .logo-light {
+    display: block;
+}
+
+.footmark span {
+    letter-spacing: .14em;
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 12px;
+    color: var(--muted);
+}
+
+/* Responsive (navbar-only global rule) */
+/* Utility: Mobile only elements */
+.mobile-only {
+    display: none;
+}
+
+/* Responsive (navbar-only global rule) */
+@media (max-width: 1020px) {
+    .nav-links {
+        display: none;
+    }
+}
+
+@media (max-width: 980px) {
+    .mobile-only {
+        display: block;
+    }
+}
+
+/* =========================
+   GLOBAL TYPOGRAPHY PRIMITIVES
+========================= */
+:where(h1) {
+    margin: 10px 0 10px;
+    font-weight: var(--h1Weight);
+    line-height: var(--h1Line);
+    letter-spacing: var(--h1Track);
+    font-size: var(--h1Size);
+}
+
+:where(h2) {
+    margin: 0;
+    font-weight: var(--h2Weight);
+    letter-spacing: var(--h2Track);
+    font-size: var(--h2Size);
+    line-height: var(--h2Line);
+}
+
+.sub {
+    color: var(--muted);
+    font-size: var(--subSize);
+    line-height: var(--subLine);
+    max-width: var(--subMax);
+    font-weight: 400;
+}
+
+/* =========================
+   HERO SYSTEM
+========================= */
+.hero {
+    padding: var(--heroPad);
+}
+
+.hero-center {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+}
+
+.hero-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 18px;
+}
+
+/* =========================
+   SECTION SCAFFOLDING
+========================= */
+section {
+    padding: var(--sectionPad);
+}
+
+.section-head {
+    display: flex;
+    justify-content: center;
+    text-align: center;
+    margin-bottom: 18px;
+}
+
+.section-title {
+    position: relative;
+    display: inline-block;
+}
+
+.section-title:after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: -10px;
+    width: 84px;
+    height: 1px;
+    background: rgba(255, 255, 255, .14);
+}
+
+.hint {
+    margin-top: 10px;
+    font-size: 13px;
+    color: var(--muted2);
+    line-height: 1.7;
+}
+
+/* =========================
+   REUSABLE UNDERLINE EFFECTS
+========================= */
+
+/* Static gradient underline (for headings, titles) */
+.underline-effect {
+    position: relative;
+    display: inline-block;
+    padding-bottom: 10px;
+}
+
+.underline-effect::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    bottom: 2px;
+    width: 110px;
+    height: 2px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, rgba(255, 106, 0, .0), rgba(255, 106, 0, .65), rgba(255, 138, 31, .0));
+    box-shadow: 0 0 18px rgba(255, 106, 0, .18);
+}
+
+/* Modifier: wider underline */
+.underline-effect--wide::after {
+    width: 124px;
+}
+
+/* Modifier: narrower underline */
+.underline-effect--narrow::after {
+    width: 84px;
+}
+
+/* Interactive hover underline (for links, buttons) */
+.underline-hover {
+    position: relative;
+}
+
+.underline-hover::after {
+    content: "";
+    position: absolute;
+    left: 50%;
+    bottom: 4px;
+    width: 70%;
+    height: 2px;
+    background: linear-gradient(to right, transparent, rgba(212, 93, 1), transparent);
+    transform: translateX(-50%) scaleX(0);
+    transform-origin: center;
+    transition: transform 0.3s ease;
+}
+
+.underline-hover:hover::after {
+    transform: translateX(-50%) scaleX(1);
+}
+
+/* Modifier: full width underline */
+.underline-hover--full::after {
+    width: 100%;
+}
+
+/* Modifier: custom bottom position */
+.underline-hover--bottom-2::after {
+    bottom: 2px;
+}
+
+/* =========================
+   SURFACE / CARD PRIMITIVES
+========================= */
+.surface {
+    border: 1px solid var(--surfaceBorder);
+    background: var(--surfaceBg);
+    border-radius: var(--surfaceRadius);
+    box-shadow: var(--surfaceShadow);
+    position: relative;
+    transition: transform .18s ease, background .18s ease, border-color .18s ease;
+}
+
+.surface--soft {
+    --surfaceBg: var(--card2);
+}
+
+.surface--strong {
+    --surfaceBg: rgba(255, 255, 255, .07);
+}
+
+.surface:hover {
+    border-color: var(--surfaceBorderHover);
+    background: var(--surfaceBgHover);
+    transform: translateY(-2px);
+}
+
+.surface.lift-3:hover {
+    transform: translateY(-3px);
+}
+
+.surface.pad-16 {
+    padding: 16px;
+}
+
+.surface.pad-18 {
+    padding: 18px;
+}
+
+.surface.pad-20 {
+    padding: 20px;
+}
+
+.surface.pad-22 {
+    padding: 22px;
+}
+
+.surface.pad-24 {
+    padding: 24px;
+}
+
+/* =========================
+   GLOW UTILITY (cursor-reactive)
+========================= */
+.glow {
+    overflow: hidden;
+}
+
+.glow:before {
+    content: "";
+    position: absolute;
+    inset: var(--glowInset);
+    background: radial-gradient(var(--glowW) var(--glowH) at var(--mx) var(--my),
+            rgba(255, 106, 0, .14),
+            transparent var(--glowStop));
+    filter: blur(18px);
+    opacity: var(--glowOpacity);
+    pointer-events: none;
+    transform: translate(calc(var(--mxpx) * .02), calc(var(--mypx) * .02));
+}
+
+.glow.glow--tight {
+    --glowInset: -60px;
+    --glowW: 420px;
+    --glowH: 260px;
+    --glowOpacity: .8;
+    --glowStop: 62%;
+}
+
+.glow.glow--wide {
+    --glowInset: -90px;
+    --glowW: 640px;
+    --glowH: 420px;
+    --glowOpacity: .9;
+    --glowStop: 65%;
+}
+
+/* =========================
+   GRID UTILITIES
+========================= */
+.grid {
+    display: grid;
+    gap: var(--gap);
+    grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-3 {
+    grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 980px) {
+
+    .grid-2,
+    .grid-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* =========================
+   PILL / CHIP COMPONENT
+========================= */
+.pill {
+    border: 1px solid var(--pillBorder);
+    background: var(--pillBg);
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--pillText);
+    cursor: pointer;
+    transition: .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.pill:hover {
+    background: rgba(255, 255, 255, .07);
+    transform: translateY(-1px);
+}
+
+.pill.is-active {
+    border-color: rgba(255, 106, 0, .35);
+    background: linear-gradient(135deg, rgba(255, 106, 0, .20), rgba(255, 138, 31, .10));
+    color: rgba(255, 255, 255, .84);
+}
+
+/* Legacy aliases to ease migration (agents/os) */
+.f,
+.tag,
+.pill-legacy {
+    border: 1px solid var(--pillBorder);
+    background: var(--pillBg);
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--pillText);
+    cursor: pointer;
+    transition: .2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.f:hover,
+.tag:hover,
+.pill-legacy:hover {
+    background: rgba(255, 255, 255, .07);
+    transform: translateY(-1px);
+}
+
+.f.on,
+.pill-legacy.is-active {
+    border-color: rgba(255, 106, 0, .35);
+    background: linear-gradient(135deg, rgba(255, 106, 0, .20), rgba(255, 138, 31, .10));
+    color: rgba(255, 255, 255, .84);
+}
+
+/* =========================
+   BRAND STRIP / MARQUEE
+========================= */
+.brand-strip {
+    border: 1px solid rgba(255, 255, 255, .10);
+    background: rgba(255, 255, 255, .04);
+    border-radius: 999px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 18px 55px rgba(0, 0, 0, .35);
+}
+
+.brand-strip:before {
+    content: "";
+    position: absolute;
+    inset: -40px;
+    background: radial-gradient(380px 120px at var(--mx) var(--my),
+            rgba(255, 106, 0, .16),
+            transparent 65%);
+    filter: blur(18px);
+    opacity: .9;
+    pointer-events: none;
+}
+
+.marquee {
+    display: flex;
+    align-items: center;
+    gap: var(--marqueeGap);
+    min-width: 100%;
+    animation: marquee var(--marqueeDur) linear infinite;
+}
+
+.brand-logo {
+    height: var(--brandLogoH);
+    width: auto;
+    opacity: .82;
+    filter: grayscale(1) brightness(1.15) contrast(1.2) sepia(1) hue-rotate(350deg) saturate(5);
+    mix-blend-mode: screen;
+    transition: opacity .18s ease, transform .18s ease;
+}
+
+.brand-logo:hover {
+    opacity: 1;
+    transform: translateY(-1px);
+}
+
+.brand-strip-fade {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(90deg,
+            color-mix(in srgb, var(--bg) 92%, transparent),
+            transparent 10%,
+            transparent 90%,
+            color-mix(in srgb, var(--bg) 92%, transparent));
+    opacity: .7;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
