@@ -1,1179 +1,553 @@
-import os
-import json
-import logging
-import certifi
-import pytz
-import re
 import asyncio
+import logging
+import os
+import re
+import json
 import time
-from collections import defaultdict
-from datetime import datetime, timedelta
-from dotenv import load_dotenv
 from typing import Annotated
-
+from datetime import datetime, timedelta
+import pytz
 import asyncpg
+import openai
+from dotenv import load_dotenv
 
-# Fix for macOS SSL certificate verification
-os.environ["SSL_CERT_FILE"] = certifi.where()
-
-# ── Sentry error tracking (#21) ───────────────────────────────────────────────
-import sentry_sdk
-_sentry_dsn = os.environ.get("SENTRY_DSN", "")
-if _sentry_dsn:
-    from sentry_sdk.integrations.asyncio import AsyncioIntegration
-    sentry_sdk.init(
-        dsn=_sentry_dsn,
-        traces_sample_rate=0.1,
-        integrations=[AsyncioIntegration()],
-        environment=os.environ.get("ENVIRONMENT", "production"),
-    )
-
-# ── Logging setup ─────────────────────────────────────────────────────────────
-logging.getLogger("hpack").setLevel(logging.WARNING)
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("httpcore").setLevel(logging.WARNING)
+# LiveKit (Using the supported Agent + AgentSession pattern from saravm.md)
+from livekit.agents import (
+    JobContext, 
+    WorkerOptions, 
+    cli, 
+    llm,
+)
+from livekit.agents.voice import Agent, AgentSession
+from livekit.plugins import openai as lk_openai, sarvam as lk_sarvam
 
 load_dotenv()
+
+# Setup Logging
 logger = logging.getLogger("outbound-agent")
-logging.basicConfig(level=logging.INFO)
+logger.setLevel(logging.DEBUG)
 
-from livekit import api
-from livekit.agents import (
-    Agent,
-    AgentSession,
-    JobContext,
-    RoomInputOptions,
-    WorkerOptions,
-    cli,
-    llm,
-    pipeline,
-    VoicePipelineAgent,
-)
-from livekit.plugins import openai, sarvam, silero
+# Load fallback config for environments where .env is unreadable
+fallback_config = {}
+try:
+    with open("/Users/sakshi/Downloads/voice-agent/config_fixed.json", "r") as f:
+        fallback_config = json.load(f)
+except Exception:
+    pass
 
-CONFIG_FILE = "config.json"
+# File logger for debugging
+LOG_FILE = "/Users/sakshi/Downloads/voice-agent/agent_debug.log"
+fh = logging.FileHandler(LOG_FILE)
+fh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(fh)
 
-# ── Rate limiting (#37) ───────────────────────────────────────────────────────
-_call_timestamps: dict = defaultdict(list)
-RATE_LIMIT_CALLS  = 5
-RATE_LIMIT_WINDOW = 3600  # 1 hour
+# Also capture sdk logs
+logging.getLogger("livekit").addHandler(fh)
+logging.getLogger("livekit").setLevel(logging.INFO)
+
+# ── SSL FIX FOR MACOS ────────────────────────────────────────────────────────
+import ssl
+try:
+    import certifi
+    os.environ["SSL_CERT_FILE"] = certifi.where()
+    os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
+    # Aggressive fix for macOS Python Framework installs
+    ssl._create_default_https_context = ssl._create_unverified_context
+    logger.info(f"[SSL] Applied macOS SSL fix (unverified context)")
+except Exception as e:
+    logger.warning(f"[SSL] Failed to apply SSL fix: {e}")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── HELPER FUNCTIONS ────────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
 
 def normalize_number(num: str) -> str:
-    """Normalize any Indian phone number variant to E.164 (+91XXXXXXXXXX)."""
-    num = num.replace(" ", "").replace("-", "").strip()
-    if num.startswith("+"):
-        return num                 # already E.164
-    if num.startswith("91") and len(num) == 12:
-        return "+" + num          # 918046733587 → +918046733587
-    if len(num) == 10:
-        return "+91" + num        # 8046733587   → +918046733587
-    return num                     # unknown format — pass through as-is
+    """Normalize any Indian phone number variant (0, 91, +91) to E.164 (+91XXXXXXXXXX)."""
+    if not num: return ""
+    clean = re.sub(r"[^\d+]", "", num).strip()
+    # If it's not a real phone number (e.g. 'unknown', 'sip:user'), return as is
+    if not clean or len(clean) < 5: return num
+    
+    num = clean
+    if num.startswith("+91") and len(num) == 13: return num
+    if num.startswith("91") and len(num) == 12: return "+" + num
+    if num.startswith("0") and len(num) == 11: return "+91" + num[1:]
+    if len(num) == 10: return "+91" + num
+    return num
 
-
-def is_rate_limited(phone: str) -> bool:
-    if phone in ("unknown", "demo"):
-        return False
-    now = time.time()
-    _call_timestamps[phone] = [t for t in _call_timestamps[phone] if now - t < RATE_LIMIT_WINDOW]
-    if len(_call_timestamps[phone]) >= RATE_LIMIT_CALLS:
-        return True
-    _call_timestamps[phone].append(now)
-    return False
-
-
-# ── Config loader (#17 partial — per-client path awareness) ───────────────────
-def get_live_config(phone_number: str | None = None):
-    """Load fallback config for LLM/TTS/STT settings.
-    NOTE: system_prompt + first_message now come from DB via fetch_agent_config_from_db()
-    and will always override the 'agent_instructions' / 'first_line' keys here.
-    """
-    config = {}
-    paths = []
-    # Per-phone file configs are now SUPERSEDED by DB lookup — commented out
-    # if phone_number and phone_number != "unknown":
-    #     clean = phone_number.replace("+", "").replace(" ", "")
-    #     paths.append(f"configs/{clean}.json")  # e.g. configs/918046733587.json
-    paths += ["configs/default.json", CONFIG_FILE]
-
-    for path in paths:
-        if os.path.exists(path):
-            try:
-                with open(path, "r") as f:
-                    config = json.load(f)
-                    logger.info(f"[CONFIG] Loaded: {path}")
-                    break
-            except Exception as e:
-                logger.error(f"[CONFIG] Failed to read {path}: {e}")
-
-    return {
-        # agent_instructions is ALWAYS overridden by DB — kept here as empty fallback only
-        # "agent_instructions": config.get("agent_instructions", ""),
-        "stt_min_endpointing_delay": config.get("stt_min_endpointing_delay", 0.05),
-        "llm_model":                 config.get("llm_model", "gpt-4o-mini"),
-        "llm_provider":              config.get("llm_provider", "openai"),
-        "tts_voice":                 config.get("tts_voice", "kavya"),
-        "tts_language":              config.get("tts_language", "hi-IN"),
-        "tts_provider":              config.get("tts_provider", "sarvam"),
-        "stt_provider":              config.get("stt_provider", "sarvam"),
-        "stt_language":              config.get("stt_language", "unknown"),
-        "lang_preset":               config.get("lang_preset", "multilingual"),
-        "max_turns":                 config.get("max_turns", 25),
-        **config,
+def normalize_indian_text(text: str) -> str:
+    """Normalize text for smoother Indian-English TTS pronunciation."""
+    if not text: return ""
+    replacements = {
+        "Rs.": "Rupees",
+        "INR": "Rupees",
+        "AI": "A.I.",
+        "&": "and",
+        "No.": "Number",
+        "hr": "hour",
+        "min": "minute",
+        "sec": "second",
+        "vs": "versus",
+        "km": "kilometers",
+        "kg": "kilograms",
     }
+    for k, v in replacements.items():
+        text = text.replace(k, v)
+    # Ensure punctuation ends sentences for breathing room
+    if text and text[-1].isalnum():
+        text += "."
+    return text
 
-
-
-# ── DB config fetcher — fetches system_prompt + first_message from PostgreSQL ─
-async def fetch_agent_config_from_db(phone_number: str) -> dict:
-    """
-    Two-step DB lookup on every call:
-      1. phone_numbers.phone_number = $1  →  agent_id   (via phone_numbers.agent_id FK)
-      2. agents.id = agent_id             →  system_prompt, first_message
-    Hard-raises if anything is missing so call fails loudly instead of
-    silently using the wrong agent config.
-
-    Schema: phone_numbers.agent_id → agents.id  (FK is on phone_numbers side)
-    """
-    db_url = os.getenv("DATABASE_URL", "")
-    if not db_url:
-        raise RuntimeError("[DB-CONFIG] DATABASE_URL is not set — cannot fetch agent config")
-    if phone_number in ("unknown", "demo", ""):
-        raise RuntimeError(f"[DB-CONFIG] Cannot fetch agent config for unresolved phone: {phone_number!r}")
-
-    logger.info(f"[DB-CONFIG] ▶ Incoming number: {phone_number}")
-
-    conn = await asyncpg.connect(dsn=db_url, ssl="require")
-    try:
-        # ── Step 1: phone_number → agent_id ──────────────────────────────
-        # Schema: phone_numbers.agent_id is the FK pointing to agents.id
-        phone_row = await conn.fetchrow(
-            "SELECT agent_id FROM phone_numbers "
-            "WHERE phone_number = $1 "
-            "LIMIT 1",
-            phone_number,
-        )
-
-        if not phone_row:
-            raise RuntimeError(
-                f"[DB-CONFIG] No agent found for number: {phone_number} — "
-                f"check phone_numbers table and agent assignment"
-            )
-
-        agent_id = phone_row["agent_id"]
-        logger.info(f"[DB-CONFIG] ✅ Resolved agent_id: {agent_id}")
-
-        # ── Step 2: agent_id → system_prompt + first_message ─────────────
-        agent_row = await conn.fetchrow(
-            "SELECT system_prompt, first_message FROM agents WHERE id = $1",
-            agent_id,
-        )
-
-        if not agent_row:
-            # TRY AUTO-RECOVERY: If mapped agent is missing, pick the most recent existing agent
-            # to prevent a total service outage.
-            logger.warning(f"[DB-CONFIG] ⚠️ Agent {agent_id} missing — attempting to find any valid agent...")
-            recovery_row = await conn.fetchrow(
-                "SELECT id, system_prompt, first_message FROM agents ORDER BY created_at DESC LIMIT 1"
-            )
-
-            if not recovery_row:
-                raise RuntimeError(
-                    f"[DB-CONFIG] CRITICAL: Agent {agent_id} is missing AND no other agents exist in the 'agents' table. "
-                    f"Please create an agent in the dashboard first."
-                )
-
-            agent_row = recovery_row
-            new_id = recovery_row["id"]
-
-            try:
-                # Update mapping so we don't hit this recovery path for every single call
-                await conn.execute(
-                    "UPDATE phone_numbers SET agent_id = $1 WHERE phone_number = $2",
-                    new_id, phone_number
-                )
-                logger.info(f"[DB-CONFIG] ✅ Auto-recovered: Remapped {phone_number} to valid agent {new_id}")
-            except Exception as e:
-                logger.warning(f"[DB-CONFIG] Failed to update phone_numbers mapping: {e} (continuing with recovered agent)")
-
-        system_prompt = agent_row["system_prompt"] or ""
-        
-        # Inject reservation rules
-        system_prompt += """
-
-RESERVATION RULES:
-If user wants to book a table:
-1. Ask number of guests
-2. Ask date
-3. Ask time
-4. Ask name
-5. Ask phone (if needed)
-6. Confirm all details
-7. ONLY after confirmation → call save_reservation
-
-Never book without confirmation.
-Keep responses short and natural.
-
-AVAILABILITY RULE:
-Before confirming any reservation:
-- Call check_availability
-- If available → proceed
-- If full → suggest another time
-
-Never confirm a booking without checking availability.
-"""
-
-        first_message = agent_row["first_message"] or ""
-
-        if not system_prompt:
-            raise RuntimeError(
-                f"[DB-CONFIG] system_prompt is empty for agent_id={agent_id} — "
-                f"save a prompt via /api/agent/save-config first"
-            )
-
-        logger.info(f"[DB-CONFIG] ✅ Using prompt   : {system_prompt[:80]!r}{'...' if len(system_prompt) > 80 else ''}")
-        logger.info(f"[DB-CONFIG] ✅ First message  : {first_message[:80]!r}{'...' if len(first_message) > 80 else ''}")
-        logger.info(f"[DB-CONFIG] ✅ Prompt length  : {len(system_prompt)} chars")
-
-        return {
-            "agent_instructions": system_prompt,
-            "first_line":         first_message,
-            "agent_id":           str(agent_id),
-        }
-    finally:
-        await conn.close()
-
-
-# ── Token counter (#11) ───────────────────────────────────────────────────────
-def count_tokens(text: str) -> int:
-    try:
-        import tiktoken
-        enc = tiktoken.encoding_for_model("gpt-4o")
-        return len(enc.encode(text))
-    except Exception:
-        return len(text.split())
-
-
-# ── IST time context ──────────────────────────────────────────────────────────
 def get_ist_time_context() -> str:
-    ist = pytz.timezone("Asia/Kolkata")
-    now = datetime.now(ist)
-    today_str = now.strftime("%A, %B %d, %Y")
-    time_str  = now.strftime("%I:%M %p")
-    days_lines = []
-    for i in range(7):
-        day   = now + timedelta(days=i)
-        label = "Today" if i == 0 else ("Tomorrow" if i == 1 else day.strftime("%A"))
-        days_lines.append(f"  {label}: {day.strftime('%A %d %B %Y')} → ISO {day.strftime('%Y-%m-%d')}")
-    days_block = "\n".join(days_lines)
-    return (
-        f"\n\n[SYSTEM CONTEXT]\n"
-        f"Current date & time: {today_str} at {time_str} IST\n"
-        f"Resolve ALL relative day references using this table:\n{days_block}\n"
-        f"Always use ISO dates when calling save_booking_intent. Appointments in IST (+05:30).]"
-    )
-
-
-# ── Language presets ──────────────────────────────────────────────────────────
-LANGUAGE_PRESETS = {
-    "hinglish":    {"label": "Hinglish (Hindi+English)", "tts_language": "hi-IN", "tts_voice": "kavya",  "instruction": "Speak in natural Hinglish — mix Hindi and English like educated Indians do. Default to Hindi but use English words when more natural."},
-    "hindi":       {"label": "Hindi",                   "tts_language": "hi-IN", "tts_voice": "ritu",   "instruction": "Speak only in pure Hindi. Avoid English words wherever a Hindi equivalent exists."},
-    "english":     {"label": "English (India)",         "tts_language": "en-IN", "tts_voice": "dev",    "instruction": "Speak only in Indian English with a warm, professional tone."},
-    "tamil":       {"label": "Tamil",                   "tts_language": "ta-IN", "tts_voice": "priya",  "instruction": "Speak only in Tamil. Use standard spoken Tamil for a professional context."},
-    "telugu":      {"label": "Telugu",                  "tts_language": "te-IN", "tts_voice": "kavya",  "instruction": "Speak only in Telugu. Use clear, polite spoken Telugu."},
-    "gujarati":    {"label": "Gujarati",                "tts_language": "gu-IN", "tts_voice": "rohan",  "instruction": "Speak only in Gujarati. Use polite, professional Gujarati."},
-    "bengali":     {"label": "Bengali",                 "tts_language": "bn-IN", "tts_voice": "neha",   "instruction": "Speak only in Bengali (Bangla). Use standard, polite spoken Bengali."},
-    "marathi":     {"label": "Marathi",                 "tts_language": "mr-IN", "tts_voice": "shubh",  "instruction": "Speak only in Marathi. Use polite, standard spoken Marathi."},
-    "kannada":     {"label": "Kannada",                 "tts_language": "kn-IN", "tts_voice": "rahul",  "instruction": "Speak only in Kannada. Use clear, professional spoken Kannada."},
-    "malayalam":   {"label": "Malayalam",               "tts_language": "ml-IN", "tts_voice": "ritu",   "instruction": "Speak only in Malayalam. Use polite, professional spoken Malayalam."},
-    "multilingual":{"label": "Multilingual (Auto)",     "tts_language": "hi-IN", "tts_voice": "kavya",  "instruction": "Detect the caller's language from their first message and reply in that SAME language for the entire call. Supported: Hindi, Hinglish, English, Tamil, Telugu, Gujarati, Bengali, Marathi, Kannada, Malayalam. Switch if caller switches."},
-}
-
-def get_language_instruction(lang_preset: str) -> str:
-    preset = LANGUAGE_PRESETS.get(lang_preset, LANGUAGE_PRESETS["multilingual"])
-    return f"\n\n[LANGUAGE DIRECTIVE]\n{preset['instruction']}"
-
-
-# ── External imports ──────────────────────────────────────────────────────────
-from calendar_tools import get_available_slots, create_booking, cancel_booking
-from notify import (
-    notify_booking_confirmed,
-    notify_booking_cancelled,
-    notify_call_no_booking,
-    notify_agent_error,
-)
-
+    tz = pytz.timezone('Asia/Kolkata')
+    now = datetime.now(tz)
+    tomorrow = now + timedelta(days=1)
+    day_name = now.strftime("%A")
+    date_str = now.strftime("%Y-%m-%d")
+    tomorrow_str = tomorrow.strftime("%Y-%m-%d")
+    curr_time = now.strftime("%I:%M %p")
+    return f"\n\n[TIME CONTEXT] Today is {day_name}, {date_str}. Tomorrow is {tomorrow_str}. Current IST Time: {curr_time}\n"
 
 # ══════════════════════════════════════════════════════════════════════════════
-# TOOL CONTEXT — All AI-callable functions
+# ── CORE BUSINESS LOGIC: AgentTools ──────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
-class AgentTools(llm.ToolContext):
+class AgentTools:
+    def __init__(self, agent_id: str, caller_phone: str):
+        self.agent_id = agent_id
+        self.caller_phone = caller_phone
 
-    def __init__(self, caller_phone: str, caller_name: str = "", agent_id: str = ""):
-        super().__init__(tools=[])
-        self.caller_phone        = caller_phone
-        self.caller_name         = caller_name
-        self.agent_id            = agent_id
-        self.booking_intent: dict | None = None
-        self.sip_domain          = os.getenv("VOBIZ_SIP_DOMAIN")
-        self.ctx_api             = None
-        self.room_name           = None
-        self._sip_identity       = None
-
-    # ── Tool: Search Knowledge Base (RAG) ─────────────────────────────────
-    @llm.function_tool(description="Search the hotel/restaurant knowledge base for information. Call this whenever the user asks about the menu, hours, location, prices, or general info.")
-    async def search_knowledge_base(self, query: Annotated[str, "The user's specific question"]) -> str:
-        logger.info(f"[RAG] searching for: {query}")
-        if not self.agent_id:
-            return "Knowledge base unavailable (no agent_id)."
-            
+    @llm.function_tool(description="Search the hotel/restaurant knowledge base for menu, hours, or general info.")
+    async def search_knowledge_base(self, query: Annotated[str, "The user's question"]) -> str:
+        logger.info(f"[TOOL] RAG query: {query}")
         try:
-            import openai
-            import asyncpg
-            client = openai.AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+            key = os.getenv("OPENAI_API_KEY") or fallback_config.get("OPENAI_API_KEY")
+            client = openai.AsyncOpenAI(api_key=key)
             resp = await client.embeddings.create(input=query, model="text-embedding-3-small")
             emb = resp.data[0].embedding
             emb_str = f"[{','.join(str(f) for f in emb)}]"
             
             db_url = os.getenv("DATABASE_URL")
+            if not db_url and "DATABASE_URL" in fallback_config:
+                db_url = fallback_config["DATABASE_URL"]
+            
             conn = await asyncpg.connect(db_url, ssl='require')
             rows = await conn.fetch(
-                """
-                SELECT content
-                FROM knowledge_chunks
-                WHERE agent_id = CAST($1 AS uuid)
-                ORDER BY embedding <-> $2::vector
-                LIMIT 3
-                """,
+                "SELECT content FROM knowledge_chunks WHERE agent_id = CAST($1 AS uuid) ORDER BY embedding <-> $2::vector LIMIT 3",
                 self.agent_id, emb_str
             )
             await conn.close()
-            
-            if not rows:
-                return "No specific information found in the knowledge base."
-            
-            knowledge = "\n\n".join(r["content"] for r in rows)
-            logger.info(f"[RAG] Found chunks: {len(rows)}")
-            return knowledge
+            knowledge = "\n".join([r['content'] for r in rows])
+            return knowledge if knowledge else "No specific info found in knowledge base."
         except Exception as e:
-            logger.error(f"[RAG] Search failed: {e}")
-            return "Knowledge base is currently unavailable."
+            logger.error(f"[RAG ERROR] {e}")
+            return "Error searching knowledge base."
 
-    # ── Tool: Transfer to Human ───────────────────────────────────────────
-    @llm.function_tool(description="Transfer this call to a human agent. Use if: caller asks for human, is angry, or query is outside scope.")
-    async def transfer_call(self) -> str:
-        logger.info("[TOOL] transfer_call triggered")
-        destination = os.getenv("DEFAULT_TRANSFER_NUMBER")
-        if destination and self.sip_domain and "@" not in destination:
-            clean_dest  = destination.replace("tel:", "").replace("sip:", "")
-            destination = f"sip:{clean_dest}@{self.sip_domain}"
-        if destination and not destination.startswith("sip:"):
-            destination = f"sip:{destination}"
+    @llm.function_tool(description="Save a new reservation after collecting name, date, time, and guests.")
+    async def save_reservation(self, name: str, date: str, time: str, guests: int, phone: str = "", special_req: str = "") -> str:
+        logger.info(f"[TOOL] save_reservation called: name={name}, date={date}, time={time}, guests={guests}, phone={phone}")
+        final_phone = phone or self.caller_phone
         try:
-            if self.ctx_api and self.room_name and destination and self._sip_identity:
-                await self.ctx_api.sip.transfer_sip_participant(
-                    api.TransferSIPParticipantRequest(
-                        room_name=self.room_name,
-                        participant_identity=self._sip_identity,
-                        transfer_to=destination,
-                        play_dialtone=False,
-                    )
-                )
-                return "Transfer initiated successfully."
-            return "Unable to transfer right now."
-        except Exception as e:
-            logger.error(f"Transfer failed: {e}")
-            return "Unable to transfer right now."
-
-    # ── Tool: End Call ────────────────────────────────────────────────────
-    @llm.function_tool(description="End the call. Use ONLY when caller says bye/goodbye or after booking is fully confirmed.")
-    async def end_call(self) -> str:
-        logger.info("[TOOL] end_call triggered — hanging up.")
-        try:
-            if self.ctx_api and self.room_name and self._sip_identity:
-                await self.ctx_api.sip.transfer_sip_participant(
-                    api.TransferSIPParticipantRequest(
-                        room_name=self.room_name,
-                        participant_identity=self._sip_identity,
-                        transfer_to="tel:+00000000",
-                        play_dialtone=False,
-                    )
-                )
-        except Exception as e:
-            logger.warning(f"[END-CALL] SIP hangup failed: {e}")
-        return "Call ended."
-
-    # ── Tool: Save Booking Intent ─────────────────────────────────────────
-    @llm.function_tool(description="Save booking intent after caller confirms appointment. Call this ONCE after you have name, phone, email, date, time.")
-    async def save_booking_intent(
-        self,
-        start_time:  Annotated[str,  "ISO 8601 datetime e.g. '2026-03-01T10:00:00+05:30'"],
-        caller_name: Annotated[str,  "Full name of the caller"],
-        caller_phone:Annotated[str,  "Phone number of the caller"],
-        notes:       Annotated[str,  "Any notes, email, or special requests"] = "",
-    ) -> str:
-        logger.info(f"[TOOL] save_booking_intent: {caller_name} at {start_time}")
-        try:
-            self.booking_intent = {
-                "start_time":   start_time,
-                "caller_name":  caller_name,
-                "caller_phone": caller_phone,
-                "notes":        notes,
-            }
-            self.caller_name = caller_name
-            return f"Booking intent saved for {caller_name} at {start_time}. I'll confirm after the call."
-        except Exception as e:
-            logger.error(f"[TOOL] save_booking_intent failed: {e}")
-            return "I had trouble saving the booking. Please try again."
-
-    # ── Tool: Check Availability ──────────────────────────────────────────
-    @llm.function_tool(description="Check if a table is available for a given date, time, and party size. Always call this before confirming a booking.")
-    async def check_availability(
-        self,
-        date: Annotated[str, "Date to check in YYYY-MM-DD format e.g. '2026-03-01'"],
-        time: Annotated[str, "Time to check in HH:MM format"],
-        guests: Annotated[int, "Number of guests"]
-    ) -> str:
-        logger.info(f"[TOOL] check_availability: date={date}, time={time}, guests={guests}")
-        if not self.agent_id:
-            return "Unable to check availability (missing agent context)."
-            
-        try:
-            import asyncpg
-            import json
-            from datetime import datetime, timedelta
-            
-            # Normalize time to nearest 30 mins
+            from datetime import datetime
             try:
-                dt_time = datetime.strptime(time, "%H:%M")
-                m = dt_time.minute
-                rounded_minute = 0 if m < 15 else (30 if m < 45 else 0)
-                hour_adj = 1 if m >= 45 else 0
-                # Be careful crossing the day boundary (24:00 is invalid in strptime/strftime for next day)
-                dt_time = (dt_time.replace(minute=rounded_minute) + timedelta(hours=hour_adj))
-                normalized_time = dt_time.strftime("%H:%M")
-            except Exception:
-                normalized_time = time
-                
-            db_url = os.getenv("DATABASE_URL")
-            conn = await asyncpg.connect(db_url, ssl='require')
+                dt_date = datetime.strptime(date, "%Y-%m-%d").date()
+            except:
+                dt_date = datetime.strptime(date, "%d-%m-%Y").date()
             
-            row = await conn.fetchrow("""
-                SELECT COALESCE(SUM(guests), 0) as total
-                FROM reservations
-                WHERE agent_id = CAST($1 AS uuid)
-                AND date = CAST($2 AS date)
-                AND time = CAST($3 AS time)
-                AND status = 'confirmed'
-            """, self.agent_id, date, normalized_time)
-
-            current = row["total"] if row and row["total"] else 0
-
-            capacity_val = await conn.fetchval("""
-                SELECT max_capacity
-                FROM agents
-                WHERE id = CAST($1 AS uuid)
-            """, self.agent_id)
-            capacity = capacity_val if capacity_val is not None else 20
-            
-            await conn.close()
-
-            if current + guests <= capacity:
-                return json.dumps({"status": "available"})
+            time_str = time if ":" in time else f"{time}:00"
+            if time_str.count(":") == 1:
+                dt_time = datetime.strptime(time_str, "%H:%M").time()
             else:
-                try:
-                    dt = datetime.strptime(normalized_time, "%H:%M")
-                    sug_list = []
-                    # Provide 4 alternatives
-                    for offset in [-60, -30, 30, 60]:
-                        sug = (dt + timedelta(minutes=offset)).strftime("%I:%M %p")
-                        sug_list.append(sug)
-                    return json.dumps({
-                        "status": "full",
-                        "suggestions": sug_list
-                    })
-                except Exception:
-                    return json.dumps({"status": "full", "suggestions": ["7:30 PM", "9:00 PM"]})
-        except Exception as e:
-            logger.error(f"[TOOL] check_availability failed: {e}")
-            return "I'm having trouble checking availability right now."
+                dt_time = datetime.strptime(time_str, "%H:%M:%S").time()
 
-    # ── Tool: Business Hours (#31) ────────────────────────────────────────
-    @llm.function_tool(description="Check if the business is currently open and what the operating hours are.")
-    async def get_business_hours(self) -> str:
-        ist  = pytz.timezone("Asia/Kolkata")
-        now  = datetime.now(ist)
-        hours = {
-            0: ("Monday",    "10:00", "19:00"),
-            1: ("Tuesday",   "10:00", "19:00"),
-            2: ("Wednesday", "10:00", "19:00"),
-            3: ("Thursday",  "10:00", "19:00"),
-            4: ("Friday",    "10:00", "19:00"),
-            5: ("Saturday",  "10:00", "17:00"),
-            6: ("Sunday",    None,    None),
-        }
-        day_name, open_t, close_t = hours[now.weekday()]
-        current_time = now.strftime("%H:%M")
-        if open_t is None:
-            return "We are closed on Sundays. Next opening: Monday 10:00 AM IST."
-        if open_t <= current_time <= close_t:
-            return f"We are OPEN. Today ({day_name}): {open_t}–{close_t} IST."
-        return f"We are CLOSED. Today ({day_name}): {open_t}–{close_t} IST."
-
-    # ── Tool: Save Reservation ──────────────────────────────────────────────
-    @llm.function_tool(description="Save a reservation for the user after collecting all details and confirming.")
-    async def save_reservation(
-        self,
-        name: Annotated[str, "Customer Name"],
-        phone: Annotated[str, "Customer Phone Number"],
-        date: Annotated[str, "Reservation Date in YYYY-MM-DD format"],
-        time: Annotated[str, "Reservation Time in HH:MM format"],
-        guests: Annotated[int, "Number of Guests"],
-        special_request: Annotated[str, "Special requests or notes"] = ""
-    ) -> str:
-        logger.info(f"[TOOL] save_reservation triggered for {name}")
-        if not self.agent_id:
-            return "Unable to save reservation right now (missing agent context)."
-            
-        try:
-            import asyncpg
-            db_url = os.getenv("DATABASE_URL")
+            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
             conn = await asyncpg.connect(db_url, ssl='require')
-            await conn.execute("""
-                INSERT INTO reservations (
-                    agent_id, customer_name, phone, date, time, guests, status, special_request
-                )
-                VALUES (CAST($1 AS uuid), $2, $3, CAST($4 AS date), CAST($5 AS time), $6, $7, $8)
-            """,
-            self.agent_id,
-            name,
-            phone,
-            date,
-            time,
-            guests,
-            "confirmed",
-            special_request
+            await conn.execute(
+                "INSERT INTO reservations (agent_id, customer_name, phone, date, time, guests, status, special_request) "
+                "VALUES (CAST($1 AS uuid), $2, $3, $4, $5, $6, 'confirmed', $7)",
+                self.agent_id, name, final_phone, dt_date, dt_time, int(guests), special_req
             )
             await conn.close()
-            return "Reservation confirmed successfully"
+            logger.info(f"[DB-SUCCESS] Reservation saved for {name} (Agent: {self.agent_id})")
+            return f"Success! Reservation confirmed for {name} on {date} at {time} for {guests} guests."
         except Exception as e:
-            logger.error(f"[RESERVATION] Save failed: {e}")
-            return "Failed to save reservation."
+            logger.error(f"[DB ERR] {e}")
+            return f"Failed to save reservation: {str(e)}"
 
+    @llm.function_tool(description="Search for an existing reservation to confirm details or prepare for modification. Useful for 'Modify reservation' or 'Cancel reservation' requests.")
+    async def get_reservation(self, phone: str = "", date: str = "") -> str:
+        logger.info(f"[TOOL] get_reservation called: phone={phone}, date={date}")
+        try:
+            from datetime import datetime
+            search_phone = phone or self.caller_phone
+            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
+            conn = await asyncpg.connect(db_url, ssl='require')
+            
+            query = "SELECT id, customer_name, date, time, guests FROM reservations WHERE agent_id = CAST($1 AS uuid) AND phone = $2"
+            args = [self.agent_id, search_phone]
+            
+            if date:
+                try:
+                    dt_date = datetime.strptime(date, "%Y-%m-%d").date()
+                except:
+                    dt_date = datetime.strptime(date, "%d-%m-%Y").date()
+                query += f" AND date = $3"
+                args.append(dt_date)
+            
+            query += " ORDER BY created_at DESC LIMIT 1"
+            row = await conn.fetchrow(query, *args)
+            await conn.close()
+            
+            if row:
+                return (f"Found reservation: ID {row['id']}, Name: {row['customer_name']}, "
+                        f"Date: {row['date']}, Time: {row['time']}, Guests: {row['guests']}. "
+                        "You can now offer to modify or cancel this.")
+            return "No reservation found for these details. Ask the user for the phone number or date used."
+        except Exception as e:
+            logger.error(f"[SEARCH ERR] {e}")
+            return f"Error searching: {e}"
+
+    @llm.function_tool(description="Update an existing reservation's date, time, or guests. Requires the reservation ID found via get_reservation.")
+    async def update_reservation(self, res_id: str, date: str = "", time: str = "", guests: int = 0) -> str:
+        try:
+            from datetime import datetime
+            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
+            conn = await asyncpg.connect(db_url, ssl='require')
+            
+            updates = []
+            args = [res_id]
+            i = 2
+            
+            if date:
+                try:
+                    dt_date = datetime.strptime(date, "%Y-%m-%d").date()
+                except:
+                    dt_date = datetime.strptime(date, "%d-%m-%Y").date()
+                updates.append(f"date = ${i}")
+                args.append(dt_date)
+                i += 1
+            if time:
+                time_str = time if ":" in time else f"{time}:00"
+                updates.append(f"time = ${i}")
+                args.append(time_str)
+                i += 1
+            if guests:
+                updates.append(f"guests = ${i}")
+                args.append(guests)
+                i += 1
+                
+            if not updates:
+                return "No updates provided."
+                
+            query = f"UPDATE reservations SET {', '.join(updates)} WHERE id = CAST($1 AS uuid)"
+            await conn.execute(query, *args)
+            await conn.close()
+            return "Success! The reservation has been updated."
+        except Exception as e:
+            logger.error(f"[UPDATE ERR] {e}")
+            return f"Error updating: {e}"
+
+    @llm.function_tool(description="Cancel an existing reservation using the ID found via get_reservation.")
+    async def cancel_reservation(self, res_id: str) -> str:
+        try:
+            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
+            conn = await asyncpg.connect(db_url, ssl='require')
+            await conn.execute(
+                "UPDATE reservations SET status = 'cancelled' WHERE id = CAST($1 AS uuid)",
+                res_id
+            )
+            await conn.close()
+            return "Success! The reservation has been cancelled."
+        except Exception as e:
+            logger.error(f"[CANCEL ERR] {e}")
+            return f"Error cancelling: {e}"
 
 # ══════════════════════════════════════════════════════════════════════════════
-# AGENT CLASS
-# ══════════════════════════════════════════════════════════════════════════════
-
-class OutboundAssistant(Agent):
-
-    def __init__(self, agent_tools: AgentTools, first_line: str = "", live_config: dict | None = None):
-        tools = llm.find_function_tools(agent_tools)
-        self._first_line  = first_line
-        self._live_config = live_config or {}
-        live_config_loaded = self._live_config
-
-        base_instructions = live_config_loaded.get("agent_instructions", "")
-        ist_context       = get_ist_time_context()
-        lang_preset       = live_config_loaded.get("lang_preset", "multilingual")
-        lang_instruction  = get_language_instruction(lang_preset)
-        final_instructions = base_instructions + ist_context + lang_instruction
-
-        # Token counter (#11)
-        token_count = count_tokens(final_instructions)
-        logger.info(f"[PROMPT] System prompt: {token_count} tokens")
-        if token_count > 600:
-            logger.warning(f"[PROMPT] Prompt exceeds 600 tokens — consider trimming for latency")
-
-        super().__init__(instructions=final_instructions, tools=tools)
-
-    async def on_enter(self):
-        # first_line always comes from DB via fetch_agent_config_from_db()
-        # The hardcoded fallback below is unreachable in production
-        # (we hard-fail if first_message is missing in DB)
-        greeting = self._live_config.get("first_line", self._first_line)
-        # Previously hardcoded fallback — now commented out:
-        # greeting = self._live_config.get(
-        #     "first_line",
-        #     self._first_line or (
-        #         "Namaste! This is Aryan from RapidX AI — we help businesses automate with AI. "
-        #         "Hmm, may I ask what kind of business you run?"
-        #     )
-        # )
-        await self.session.generate_reply(
-            instructions=f"Say exactly this phrase: '{greeting}'"
-        )
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# MAIN ENTRYPOINT
+# ── ENTRYPOINT ──────────────────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def entrypoint(ctx: JobContext):
-    global agent_is_speaking
-    logger.info(f"[JOB-START] Starting agent job for {ctx.room.name}")
-
-    # ── Connect ───────────────────────────────────────────────────────────
-    await ctx.connect()
-    logger.info(f"[STEP 1] ✅ Call Connected to Room: {ctx.room.name}")
-
-    # ── Wait for Participant ──────────────────────────────────────────────
-    logger.info("[STEP 2] ⏳ Waiting for participant to join...")
-    await ctx.wait_for_participant()
-    logger.info("[STEP 2] ✅ Participant joined — preparing agent pipeline.")
-
-    # ── Extract caller info ───────────────────────────────────────────────
-    phone_number = None
-    agent_number = None
-    caller_name  = ""
-    caller_phone = "unknown"
-
-    # Try metadata first (outbound dispatch)
-    metadata = ctx.job.metadata or ""
-    if metadata:
-        try:
-            meta = json.loads(metadata)
-            phone_number = meta.get("phone_number")
-            agent_number = meta.get("agent_number")
-        except Exception:
-            pass
-
-    # Extract from SIP participants
-    for identity, participant in ctx.room.remote_participants.items():
-        # Name from caller ID (#32)
-        if participant.name and participant.name not in ("", "Caller", "Unknown"):
-            caller_name = participant.name
-            logger.info(f"[CALLER-ID] Name from SIP: {caller_name}")
-            
-        attr = participant.attributes or {}
-        
-        # Robustly extract Caller Phone (who is calling)
-        if not phone_number:
-            phone_number = (
-                attr.get("sip.fromUser")
-                or attr.get("sip.phoneNumber")
-                or attr.get("phoneNumber")
-            )
-
-        # Robustly extract Agent Number (the business DID dialed)
-        if not agent_number:
-            agent_number = (
-                attr.get("sip.toUser")
-                or attr.get("sip.callTo", "")
-            )
-
-        # Identity fallback (regex) - useful for some SIP bridges
-        if not phone_number and "+" in identity:
-            import re as _re
-            m = _re.search(r"\+\d{7,15}", identity)
-            if m:
-                phone_number = m.group()
-
-    # ── Normalize phone to E.164 BEFORE rate-limiting and DB lookup ────────
-    caller_phone = normalize_number(phone_number) if phone_number else "unknown"
-    logger.info(f"[PHONE] Caller Normalized: {phone_number!r} → {caller_phone!r}")
+    logger.info(f"--- [NEW JOB RECEIVED] ID: {ctx.job.id} Room: {ctx.room.name} ---")
     
-    agent_phone_normalized = normalize_number(agent_number) if agent_number else ""
-    # Fallback to the known DID if extraction fails
-    if not agent_phone_normalized:
-        agent_phone_normalized = "+918046733587"
-        
-    logger.info(f"[PHONE] Agent Normalized: {agent_number!r} → {agent_phone_normalized!r}")
+    # 1. Connect and Wait for Participant (Ensure call is established)
+    await ctx.connect()
+    try:
+        participant = await ctx.wait_for_participant()
+        logger.info(f"Participant identifed: {participant.identity}")
+    except Exception as e:
+        logger.warning(f"Timeout waiting for participant: {e}")
+    
+    # Fetch Metadata for Identity
+    metadata = {}
+    try:
+        raw_meta = getattr(ctx.job, 'metadata', "")
+        logger.info(f"[JOB-METADATA] Raw: {raw_meta}")
+        if raw_meta:
+            metadata = json.loads(raw_meta)
+        elif hasattr(ctx.job, 'metadata_obj') and ctx.job.metadata_obj:
+            metadata = ctx.job.metadata_obj
+    except Exception as e:
+        logger.warning(f"Failed to parse job metadata: {e}")
 
-    # ── Rate limiting (#37) ───────────────────────────────────────────────
-    if is_rate_limited(caller_phone):
-        logger.warning(f"[RATE-LIMIT] Blocked {caller_phone} — too many calls in 1h")
+    # Log identified numbers
+    agent_did = normalize_number(metadata.get("sip.toUser", metadata.get("toUser", "")))
+    caller_phone = normalize_number(metadata.get("sip.fromUser", metadata.get("fromUser", "unknown")))
+    
+    if participant and (not caller_phone or caller_phone == "unknown"):
+        caller_phone = normalize_number(participant.identity)
+
+    logger.info(f"[DB-LOOKUP] Dialed DID: '{agent_did}' | Caller: '{caller_phone}'")
+
+    if not agent_did or len(agent_did) < 5:
+        # Fallback: Search room name for digits
+        matches = re.findall(r"(\+?91\d{10})|(\d{10})", ctx.job.room.name)
+        if matches:
+            for m_set in matches:
+                raw_found = [m for m in m_set if m][0]
+                found_num = normalize_number(raw_found)
+                # If the extracted number matches the caller, it's likely not the DID
+                if found_num != caller_phone:
+                    agent_did = found_num
+                    logger.info(f"[FALLBACK] Extracted DID from room: '{agent_did}'")
+                    break
+            if not agent_did:
+                # If only caller number found, we still don't have a DID
+                logger.warning(f"[FALLBACK] Room name only contained caller number ({caller_phone}). Still no DID.")
+    
+# Database Lookup for Agent Configuration
+    db_url = os.getenv("DATABASE_URL")
+    if not db_url and "DATABASE_URL" in fallback_config:
+        db_url = fallback_config["DATABASE_URL"]
+
+    row = None
+    try:
+        conn = await asyncpg.connect(db_url, ssl='require')
+        if agent_did:
+            # Normal Lookup
+            row = await conn.fetchrow(
+                "SELECT a.id, a.system_prompt, a.first_message FROM agents a "
+                "JOIN phone_numbers p ON a.id = p.agent_id "
+                "WHERE p.phone_number = $1 OR p.phone_number LIKE $2", 
+                agent_did, f"%{agent_did[-10:]}"
+            )
+            if not row:
+                # Direct agent search
+                row = await conn.fetchrow(
+                    "SELECT id, system_prompt, first_message FROM agents WHERE phone_number_id::text LIKE $1 LIMIT 1",
+                    f"%{agent_did[-10:]}"
+                )
+        
+        if not row:
+            # Deep Fallback: most recent agent
+            logger.warning("[FALLBACK] Could not resolve identity, fetching latest agent.")
+            row = await conn.fetchrow("SELECT id, system_prompt, first_message FROM agents ORDER BY created_at DESC LIMIT 1")
+        
+        await conn.close()
+    except Exception as e:
+        logger.error(f"[DB ERROR] Connection failed: {e}")
+
+    if not row:
+        logger.error(f"[CRITICAL] Could not resolve any agent for this call.")
         return
 
-    # ── Load config ───────────────────────────────────────────────────────
-    # Base config from file (llm_model, tts_voice, etc.) ─────────────────
-    live_config   = get_live_config(caller_phone)
-
-    # ── 🔥 ALWAYS fetch system_prompt + first_message from DB ────────────
-    # Hard-fails if number is not found — no silent fallback in production.
-    # Look up using the agent's DID, not the caller's number!
-    logger.info(f"[STEP 3] 🔍 Fetching DB config for DID: {agent_phone_normalized}")
-    db_agent_config = await fetch_agent_config_from_db(agent_phone_normalized)
-    live_config.update(db_agent_config)  # DB values override file values
-    logger.info(f"[STEP 3] ✅ DB Config Loaded Successfully (Agent ID: {db_agent_config.get('agent_id')})")
-
-    delay_setting = live_config.get("stt_min_endpointing_delay", 0.05)
-    llm_model     = live_config.get("llm_model", "gpt-4o-mini")
-    llm_provider  = live_config.get("llm_provider", "openai")
-    tts_voice     = live_config.get("tts_voice", "kavya")
-    tts_language  = live_config.get("tts_language", "hi-IN")
-    tts_provider  = live_config.get("tts_provider", "sarvam")
-    stt_provider  = live_config.get("stt_provider", "sarvam")
-    stt_language  = live_config.get("stt_language", "unknown")  # auto-detect (#20)
-    max_turns     = live_config.get("max_turns", 25)
-
-    # Override OS env vars from UI config
-    for key in ["LIVEKIT_URL","LIVEKIT_API_KEY","LIVEKIT_API_SECRET","OPENAI_API_KEY",
-                "SARVAM_API_KEY","CAL_API_KEY"]:
-        val = live_config.get(key.lower(), "")
-        if val:
-            os.environ[key] = val
-
-    # ── Instantiate tools ─────────────────────────────────────────────────
-    agent_id = live_config.get("agent_id", "")
-    agent_tools = AgentTools(caller_phone=caller_phone, caller_name=caller_name, agent_id=agent_id)
-    agent_tools._sip_identity = (
-        f"sip_{caller_phone.replace('+','')}" if phone_number else "inbound_caller"
+    agent_id = str(row['id'])
+    logger.info(f"[DB-CONFIG] ✅ Resolved agent_id: {agent_id}")
+    system_prompt = row['system_prompt'] or "You are a helpful assistant."
+    first_message = row['first_message'] or "Hello, how can I help you today?"
+    
+    final_prompt = (
+        system_prompt + 
+        "\n\n[INSTRUCTIONS] You MUST call the 'save_reservation' tool to actually book a table in the system. "
+        "Do this as soon as you have the guest's name, date, time, and guest count. "
+        "Wait for the tool's success response before confirming to the user that they are booked."
+        "\n\n[PRONUNCIATION GUIDELINE] Always use full words for abbreviations. For Indian names or places, "
+        "if you notice the voice engine struggling, you can use phonetic spelling. Avoid using symbols like "
+        "& or @. Always end sentences with punctuation to allow the voice to breathe."
+        + get_ist_time_context()
     )
-    agent_tools.ctx_api   = ctx.api
-    agent_tools.room_name = ctx.room.name
-
-    # ── Build LLM (#8 Groq support) ───────────────────────────────────────
-    if llm_provider == "groq":
-        agent_llm = openai.LLM.with_groq(
-            model=llm_model or "llama-3.3-70b-versatile",
-            max_completion_tokens=120,
-        )
-        logger.info(f"[LLM] Using Groq: {llm_model}")
-    elif llm_provider == "claude":
-        # Claude Haiku 3.5 via Anthropic API (#27)
-        _anthropic_key = os.environ.get("ANTHROPIC_API_KEY", "")
-        agent_llm = openai.LLM(
-            model=llm_model or "claude-haiku-3-5-latest",
-            base_url="https://api.anthropic.com/v1/",
-            api_key=_anthropic_key,
-            max_completion_tokens=120,
-        )
-        logger.info(f"[LLM] Using Claude via Anthropic: {llm_model}")
-    else:
-        agent_llm = openai.LLM(model=llm_model, max_completion_tokens=120)  # cap tokens (#7)
-        logger.info(f"[LLM] Using OpenAI: {llm_model}")
-
-    # ── Build STT (#1 16kHz, #20 auto-detect, #9 Deepgram) ──────────────
-    if stt_provider == "deepgram":
-        try:
-            from livekit.plugins import deepgram
-            agent_stt = deepgram.STT(
-                model="nova-2-general",
-                language="multi",        # multilingual mode
-                interim_results=False,
-            )
-            logger.info("[STT] Using Deepgram Nova-2")
-        except ImportError:
-            logger.warning("[STT] deepgram plugin not installed — falling back to Sarvam")
-            agent_stt = sarvam.STT(
-                language=stt_language,
-                model="saaras:v3",
-                mode="translate",
-                flush_signal=True,
-                sample_rate=16000,
-            )
-    else:
-        agent_stt = sarvam.STT(
-            language=stt_language,      # "unknown" = auto-detect (#20)
-            model="saaras:v3",
-            mode="translate",
-            flush_signal=True,
-            sample_rate=16000,          # force 16kHz (#1)
-        )
-        logger.info("[STT] Using Sarvam Saaras v3")
-
-    # ── Build TTS (#2 24kHz, #10 ElevenLabs, OpenAI) ────────────────────
-    if tts_provider == "openai":
-        _oai_voice = os.environ.get("OPENAI_TTS_VOICE", tts_voice or "alloy")
-        _oai_model = os.environ.get("OPENAI_TTS_MODEL", "tts-1")
-        agent_tts = openai.TTS(
-            model=_oai_model,
-            voice=_oai_voice,
-        )
-        logger.info(f"[TTS] Using OpenAI TTS — model: {_oai_model}, voice: {_oai_voice}")
-    elif tts_provider == "elevenlabs":
-        try:
-            from livekit.plugins import elevenlabs
-            _el_voice_id = live_config.get("elevenlabs_voice_id", "21m00Tcm4TlvDq8ikWAM")
-            agent_tts = elevenlabs.TTS(
-                model="eleven_turbo_v2_5",
-                voice_id=_el_voice_id,
-            )
-            logger.info(f"[TTS] Using ElevenLabs Turbo v2.5 — voice: {_el_voice_id}")
-        except ImportError:
-            logger.warning("[TTS] elevenlabs plugin not installed — falling back to OpenAI TTS")
-            agent_tts = openai.TTS(voice="alloy")
-    else:
-        agent_tts = sarvam.TTS(
-            target_language_code=tts_language,
-            model="bulbul:v3",
-            speaker=tts_voice,
-            speech_sample_rate=24000,          # force 24kHz (#2)
-        )
-        logger.info(f"[TTS] Using Sarvam Bulbul v3 — voice: {tts_voice} lang: {tts_language}")
-
-    # ── Sentence chunker (keep responses short for voice) ─────────────────
-    def before_tts_cb(agent_response: str) -> str:
-        sentences = re.split(r'(?<=[।.!?])\s+', agent_response.strip())
-        return sentences[0] if sentences else agent_response
-
-    # ── Turn counter + auto-close (#29) ──────────────────────────────────
-    turn_count    = 0
-    interrupt_count = 0  # (#30)
-
-    # ── IST Context + Instructions ────────────────────────────────────────
-    base_instructions = live_config.get("agent_instructions", "")
-    ist_context       = get_ist_time_context()
-    lang_preset       = live_config.get("lang_preset", "multilingual")
-    lang_instruction  = get_language_instruction(lang_preset)
-    final_instructions = base_instructions + ist_context + lang_instruction
-
-    # Token counter (#11)
-    token_count = count_tokens(final_instructions)
-    logger.info(f"[PROMPT] System prompt: {token_count} tokens")
-
-    # ── Build Agent (using VoicePipelineAgent as requested) ──────────────
-    initial_ctx = llm.ChatContext().append(
-        role="system",
-        text=final_instructions,
+    
+    # 2. Build Pipeline Components
+    # Using Saaras v3 which is optimized for Hinglish/Indian languages
+    sarvam_key = os.getenv("SARVAM_API_KEY") or fallback_config.get("SARVAM_API_KEY")
+    stt_p = lk_sarvam.STT(
+        language="unknown", 
+        model="saaras:v3",
+        flush_signal=True, # critical for turn detection in 1.4.x
+        api_key=sarvam_key
+    )
+    # Using Bulbul v3 with Kavya voice
+    tts_p = lk_sarvam.TTS(
+        target_language_code="hi-IN",
+        model="bulbul:v3",
+        speaker="kavya",
+        api_key=sarvam_key
+    )
+    # Using LLM with fallback api_key
+    openai_key = os.getenv("OPENAI_API_KEY") or fallback_config.get("OPENAI_API_KEY")
+    llm_p = lk_openai.LLM(model="gpt-4o-mini", api_key=openai_key)
+    
+    tools_obj = AgentTools(agent_id, caller_phone)
+    tools = llm.find_function_tools(tools_obj)
+    logger.info(f"[AGENT] Registered {len(tools)} tools")
+    
+    # 3. Create Agent
+    assistant = Agent(
+        instructions=final_prompt,
+        stt=stt_p,
+        tts=tts_p,
+        llm=llm_p,
+        tools=tools,
     )
 
-    agent = VoicePipelineAgent(
-        vad=silero.VAD.load(),
-        stt=agent_stt,
-        llm=agent_llm,
-        tts=agent_tts,
-        chat_ctx=initial_ctx,
-        fnc_ctx=agent_tools,
-        allow_interruptions=True,
-        min_endpointing_delay=float(delay_setting),
-        before_tts_cb=before_tts_cb,
+    # 4. Initialize Session
+    session = AgentSession(
+        turn_detection="stt", 
+        min_endpointing_delay=1.0, # Increased for better natural turn-taking
     )
 
-    # ── Start Agent ───────────────────────────────────────────────────────
-    logger.info("[STEP 4] 🚀 Starting VoicePipelineAgent...")
-    await agent.start(ctx.room)
-    logger.info("[STEP 4] ✅ Agent is now live and listening.")
+    # --- CALL LOGGING & TRANSCRIPTION SETUP ---
+    start_time = datetime.now()
+    transcript_segments = []
+    tz_ist = pytz.timezone('Asia/Kolkata')
 
-    # ── Say First Message ─────────────────────────────────────────────────
-    first_message = live_config.get("first_line", "")
+    @session.on("user_transcript")
+    def on_user_transcript(ev):
+        # Support both string events and transcript objects
+        text = ev if isinstance(ev, str) else getattr(ev, 'text', "")
+        if text:
+            logger.debug(f"[TRANSCRIPT] User: {text}")
+            transcript_segments.append(f"User: {text}")
+
+    @session.on("agent_transcript")
+    def on_agent_transcript(ev):
+        text = ev if isinstance(ev, str) else getattr(ev, 'text', "")
+        if text:
+            logger.debug(f"[TRANSCRIPT] Agent: {text}")
+            transcript_segments.append(f"Agent: {text}")
+
+    # 4. Start Session (Managed by AgentSession in 1.4.x)
+    logger.info("Starting agent session...")
+    await session.start(agent=assistant, room=ctx.room)
+    
+    # 5. Speak First Message
     if first_message:
-        logger.info(f"[STEP 5] 🗣️  Speaking first message: {first_message[:60]}...")
-        await agent.say(first_message, allow_interruptions=True)
-        logger.info("[STEP 5] ✅ First message completed.")
+        logger.info(f"Speaking greeting: {first_message}")
+        await session.say(first_message, allow_interruptions=True)
 
+    # --- REMOVED REDUNDANT LISTENERS (Caught before session start) ---
 
-    # ── TTS pre-warm (#12) ────────────────────────────────────────────────
-    try:
-        await agent.tts.prewarm()
-        logger.info("[TTS] Pre-warmed successfully")
-    except Exception as e:
-        logger.debug(f"[TTS] Pre-warm skipped: {e}")
-
-    logger.info("[AGENT] Session live — waiting for caller audio.")
-    call_start_time = datetime.now()
-
-    egress_id = None  # Recording disabled (Supabase S3 removed)
-
-    # ── Session event handlers ────────────────────────────────────────────
-    @agent.on("agent_speech_started")
-    def _agent_speech_started(ev):
-        global agent_is_speaking
-        agent_is_speaking = True
-
-    @agent.on("agent_speech_finished")
-    def _agent_speech_finished(ev):
-        global agent_is_speaking
-        agent_is_speaking = False
-
-    # Interrupt logging (#30)
-    @agent.on("agent_speech_interrupted")
-    def _on_interrupted(ev):
-        nonlocal interrupt_count
-        interrupt_count += 1
-        logger.info(f"[INTERRUPT] Agent interrupted. Total: {interrupt_count}")
-
-    FILLER_WORDS = {
-        "okay.", "okay", "ok", "uh", "hmm", "hm", "yeah", "yes",
-        "no", "um", "ah", "oh", "right", "sure", "fine", "good",
-        "haan", "han", "theek", "theek hai", "accha", "ji", "ha",
-    }
-
-    @agent.on("user_transcript_finished")
-    def on_user_speech_committed(ev: pipeline.TranscriptionEvent):
-        nonlocal turn_count
-        global agent_is_speaking
-
-        transcript = ev.text.strip()
-        transcript_lower = transcript.lower().rstrip(".")
-
-        if agent_is_speaking:
-            logger.debug(f"[FILTER-ECHO] Dropped: '{transcript}'")
-            return
-        if not transcript or len(transcript) < 3:
-            return
-        if transcript_lower in FILLER_WORDS:
-            logger.debug(f"[FILTER-FILLER] Dropped: '{transcript}'")
-            return
-
-        # Turn counter + auto-close (#29)
-        turn_count += 1
-        logger.info(f"[TRANSCRIPT] Turn {turn_count}/{max_turns}: '{transcript}'")
-        if turn_count >= max_turns:
-            logger.info(f"[LIMIT] Reached {max_turns} turns — wrapping up")
-            asyncio.create_task(
-                agent.generate_reply(
-                    instructions="Politely wrap up: thank the caller, say they can call back anytime, and say a warm goodbye."
-                )
-            )
-
-    @ctx.room.on("participant_disconnected")
-    def on_participant_disconnected(participant):
-        global agent_is_speaking
-        logger.info(f"[HANGUP] Participant disconnected: {participant.identity}")
-        agent_is_speaking = False
-        asyncio.create_task(unified_shutdown_hook(ctx))
-
-    # ══════════════════════════════════════════════════════════════════════
-    # POST-CALL SHUTDOWN HOOK
-    # ══════════════════════════════════════════════════════════════════════
-
-    async def unified_shutdown_hook(shutdown_ctx: JobContext):
-        logger.info("[SHUTDOWN] Sequence started.")
-
-        duration = int((datetime.now() - call_start_time).total_seconds())
-
-        # Booking
-        booking_status_msg = "No booking"
-        if agent_tools.booking_intent:
-            from calendar_tools import async_create_booking
-            intent = agent_tools.booking_intent
-            result = await async_create_booking(
-                start_time=intent["start_time"],
-                caller_name=intent["caller_name"] or "Unknown Caller",
-                caller_phone=intent["caller_phone"],
-                notes=intent["notes"],
-            )
-            if result.get("success"):
-                notify_booking_confirmed(
-                    caller_name=intent["caller_name"],
-                    caller_phone=intent["caller_phone"],
-                    booking_time_iso=intent["start_time"],
-                    booking_id=result.get("booking_id"),
-                    notes=intent["notes"],
-                    tts_voice=tts_voice,
-                    ai_summary="",
-                )
-                booking_status_msg = f"Booking Confirmed: {result.get('booking_id')}"
-            else:
-                booking_status_msg = f"Booking Failed: {result.get('message')}"
-        else:
-            notify_call_no_booking(
-                caller_name=agent_tools.caller_name,
-                caller_phone=agent_tools.caller_phone,
-                call_summary="Caller did not schedule during this call.",
-                tts_voice=tts_voice,
-                duration_seconds=duration,
-            )
-
-        # Build transcript
-        transcript_text = ""
+    @ctx.add_shutdown_callback
+    async def on_shutdown():
+        logger.info(f"--- [JOB {ctx.job.id} CLOSED] ---")
+        end_time = datetime.now()
+        duration = int((end_time - start_time).total_seconds())
+        
+        # 1. Capture Full Transcript from the Assistant's actual Chat Context (Memory)
+        # This is the single most reliable way to get the entire history.
+        chat_history = []
         try:
-            messages = agent.chat_ctx.messages
-            if callable(messages):
-                messages = messages()
-            lines = []
-            for msg in messages:
-                if getattr(msg, "role", None) in ("user", "assistant"):
-                    content = getattr(msg, "content", "")
-                    if isinstance(content, list):
-                        content = " ".join(str(c) for c in content if isinstance(c, str))
-                    lines.append(f"[{msg.role.upper()}] {content}")
-            transcript_text = "\n".join(lines)
+            # Flexible check for messages (property vs method)
+            msgs = assistant.chat_ctx.messages
+            if callable(msgs):
+                msgs = msgs()
+                
+            for msg in msgs:
+                # ChatMessage in 1.4.x typically uses .content
+                content = getattr(msg, 'content', getattr(msg, 'text', ""))
+                if msg.role in ["user", "assistant"] and content:
+                    role_label = "User" if msg.role == "user" else "Agent"
+                    chat_history.append(f"{role_label}: {content}")
         except Exception as e:
-            logger.error(f"[SHUTDOWN] Transcript read failed: {e}")
-            transcript_text = "unavailable"
+            logger.warning(f"Failed to read chat_ctx safely: {e}")
 
-        async def process_call_analytics(transcript: str, booking_msg: str, dest_duration: int):
-            import random
-            call_id = f"CL-{random.randint(10000, 99999)}"
+        # Fallback to segments if chat_history is empty
+        full_transcript = "\n".join(chat_history) if chat_history else "\n".join(transcript_segments)
+        
+        intent = "Dropped"
+        summary = "Call ended before any conversation was recorded."
+        
+        if full_transcript:
+            # Generate summary and intent using LLM with the user's specific categories
+            summary_prompt = (
+                "Summarize the following call transcript concisely and classify the user's primary intent "
+                "from this EXACT list: [New reservation, Modify reservation, Cancel reservation, Menu question, "
+                "Room reservation, Housekeeping, laundry, In-room dining, Spa-booking, Airport Pickup, "
+                "Maintenance, complaint, other].\n\n"
+                "Format the output as follows:\nIntent: [Exact Categorized Intent]\nSummary: [One Sentence Summary]\n\n"
+                f"Transcript:\n{full_transcript}"
+            )
             
-            # ── Capture Call Data (Step 2) ────────────────────────
-            call_data = {
-                "call_id": call_id,
-                "phone_number": agent_phone_normalized,
-                "caller_number": caller_phone,
-                "agent_id": agent_id,
-                "transcript": transcript,
-                "duration": dest_duration
-            }
-
-            sentiment = "unknown"
-            intent = "Other"
-            summary = "No summary available"
-            
-            if transcript and transcript != "unavailable":
-                try:
-                    import openai as _oai
-                    _client = _oai.AsyncOpenAI(api_key=os.environ["OPENAI_API_KEY"])
-                    
-                    # Sentiment
-                    resp = await _client.chat.completions.create(
-                        model="gpt-4o-mini", max_tokens=5,
-                        messages=[{"role":"user","content": f"Classify this call as one word: positive, neutral, negative, or frustrated.\n\n{transcript[:800]}"}]
-                    )
-                    sentiment = resp.choices[0].message.content.strip().lower()
-                    logger.info(f"[SENTIMENT] {sentiment}")
-
-                    # Intent Detection
-                    intent_prompt = f"""Classify the intent of this call into one of:
-
-- Reservation
-- FAQ
-- Order
-- Complaint
-- Escalation
-- Other
-
-Transcript:
-{transcript}
-
-Return only the intent."""
-                    resp_intent = await _client.chat.completions.create(
-                        model="gpt-4o-mini", max_tokens=10,
-                        messages=[{"role":"user","content": intent_prompt}]
-                    )
-                    intent = resp_intent.choices[0].message.content.strip()
-                    logger.info(f"[INTENT] {intent}")
-
-                    # Summary
-                    summary_prompt = f"Summarize this call in 1–2 lines:\n\n{transcript}"
-                    resp_summary = await _client.chat.completions.create(
-                        model="gpt-4o-mini", max_tokens=100,
-                        messages=[{"role":"user","content": summary_prompt}]
-                    )
-                    summary = resp_summary.choices[0].message.content.strip()
-                    logger.info(f"[SUMMARY] Generated summary.")
-
-                except Exception as e:
-                    logger.warning(f"[LLM LOGIC] Failed (sentiment/intent/summary): {e}")
-
-            # Status logic
-            if intent == "Escalation":
-                status = "escalated"
-            elif dest_duration < 20:
-                status = "dropped"
-            else:
-                status = "resolved"
-
-            # ── Save to DB (Step 5) ───────────────────────────────
-            if agent_id:
-                try:
-                    db_url = os.getenv("DATABASE_URL")
-                    if db_url:
-                        conn = await asyncpg.connect(db_url, ssl='require')
-                        await conn.execute("""
-                            INSERT INTO call_logs (
-                                agent_id,
-                                phone_number,
-                                caller_number,
-                                duration,
-                                transcript,
-                                summary,
-                                intent,
-                                status
-                            )
-                            VALUES (CAST($1 AS uuid), $2, $3, $4, $5, $6, $7, $8)
-                        """,
-                        agent_id,
-                        agent_phone_normalized,
-                        caller_phone,
-                        dest_duration,
-                        transcript,
-                        summary,
-                        intent,
-                        status
-                        )
-                        await conn.close()
-                        logger.info(f"[DB] Saved call log {call_id} to call_logs table with status {status}.")
-                except Exception as e:
-                    logger.error(f"[DB] Failed to save call log: {e}")
-
-            # Cost estimation (#34)
-            def estimate_cost(dur: int, chars: int) -> float:
-                return round((dur / 60) * 0.002 + (dur / 60) * 0.006 + (chars / 1000) * 0.003 + (chars / 4000) * 0.0001, 5)
-            estimated_cost = estimate_cost(dest_duration, len(transcript))
-            logger.info(f"[COST] Estimated: ${estimated_cost}")
-            
-            # Analytics timestamps (#19)
-            ist = pytz.timezone("Asia/Kolkata")
-            call_dt = call_start_time.astimezone(ist)
-
-            recording_url = ""
-
-            # n8n webhook (#39)
-            _n8n_url = os.getenv("N8N_WEBHOOK_URL")
-            if _n8n_url:
-                try:
-                    import httpx
-                    await asyncio.get_event_loop().run_in_executor(
-                        None,
-                        lambda: httpx.post(_n8n_url, json={
-                            "call_id":      call_id,
-                            "event":        "call_completed",
-                            "phone":        caller_phone,
-                            "caller_name":  agent_tools.caller_name,
-                            "duration":     dest_duration,
-                            "booked":       bool(agent_tools.booking_intent),
-                            "sentiment":    sentiment,
-                            "summary":      booking_msg,
-                            "recording_url":recording_url,
-                            "interrupt_count": interrupt_count,
-                            "intent":       intent,
-                            "status":       status
-                        }, timeout=5.0)
-                    )
-                    logger.info("[N8N] Webhook triggered")
-                except Exception as e:
-                    logger.warning(f"[N8N] Webhook failed: {e}")
-
-            # Save call log locally
-            import json as _json
-            _log_entry = {
-                "call_id":      call_id,
-                "phone":        caller_phone,
-                "duration":     dest_duration,
-                "summary":      booking_msg,
-                "sentiment":    sentiment,
-                "intent":       intent,
-                "status":       status,
-                "caller_name":  agent_tools.caller_name or "",
-                "was_booked":   bool(agent_tools.booking_intent),
-                "estimated_cost_usd": estimated_cost,
-                "timestamp":    call_dt.isoformat(),
-            }
             try:
-                with open("call_logs.jsonl", "a") as _f:
-                    _f.write(_json.dumps(_log_entry) + "\n")
-                logger.info(f"[LOG] Call log {call_id} saved locally for {caller_phone}")
-            except Exception as _e:
-                logger.warning(f"[LOG] Local log failed: {_e}")
+                # Generate summary with a quick LLM call using the raw OpenAI client
+                # This avoids awaiting the LLMStream object which is not supported in the LiveKit wrapper
+                client = openai.AsyncOpenAI(api_key=openai_key)
+                resp = await client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": summary_prompt}]
+                )
+                summary_raw = resp.choices[0].message.content
+                
+                # Strict Intent Extraction Guardrail
+                valid_intents = [
+                    "New reservation", "Modify reservation", "Cancel reservation", 
+                    "Menu question", "Room reservation", "Housekeeping", "laundry", 
+                    "In-room dining", "Spa-booking", "Airport Pickup", 
+                    "Maintenance", "complaint", "other"
+                ]
+                
+                # Clean and parse the LLM's raw response
+                for res_line in summary_raw.split('\n'):
+                    res_line = res_line.replace('*', '').strip() 
+                    if "intent:" in res_line.lower():
+                        ext_intent = res_line.split(":", 1)[1].strip()
+                        for v in valid_intents:
+                            if v.lower() in ext_intent.lower():
+                                intent = v
+                                break
+                    if "summary:" in res_line.lower():
+                        summary = res_line.split(":", 1)[1].strip()
+            except Exception as e:
+                logger.error(f"❌ LLM summarizing failed: {e}")
+                intent = "other"
+                summary = "Conversation occurred but summarization failed."
+        else:
+            full_transcript = "[No conversation recorded]"
 
-        # Start background task without blocking the shutdown hook
-        asyncio.create_task(process_call_analytics(transcript_text, booking_status_msg, duration))
+        try:
+            # Final resolution for caller number from participant identity if mapping failed
+            # SIP callers often identify as part of the participant.identity
+            resolved_caller = caller_phone
+            if resolved_caller == "unknown" or not resolved_caller:
+                resolved_caller = normalize_number(getattr(participant, "identity", "unknown"))
 
-    ctx.add_shutdown_callback(unified_shutdown_hook)
+            # Save to Database with correct mapping and IST Time (Simple naive datetime per system clock)
+            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
+            now_ist = datetime.now() 
+            
+            conn = await asyncpg.connect(db_url, ssl='require')
+            await conn.execute(
+                """
+                INSERT INTO call_logs (agent_id, caller_number, phone_number, duration, intent, summary, transcript, created_at, status)
+                VALUES (CAST($1 AS uuid), $2, $3, $4, $5, $6, $7, $8, 'resolved')
+                """,
+                agent_id, resolved_caller, agent_did, duration, intent, summary, full_transcript, now_ist
+            )
+            await conn.close()
+            logger.info(f"✅ Call Log successfully saved for {resolved_caller} at {now_ist} (Intent: {intent})")
+        except Exception as e:
+            logger.error(f"❌ Failed to save call log to DB: {e}")
 
-    # ── Keep Alive ──────────────────────────────────────────────────────────
-    # The entrypoint must remain active for the duration of the call.
-    # Returning from entrypoint signals that the agent's work is finished.
-    logger.info("[STEP 6] 💎 Agent persistent loop active — waiting for call termination.")
-    try:
-        while ctx.room.is_connected:
-            await asyncio.sleep(1)
-    except asyncio.CancelledError:
-        logger.info("[SHUTDOWN] Persistent loop cancelled.")
-    finally:
-        logger.info("[SHUTDOWN] Persistent loop finished.")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# WORKER ENTRY
-# ══════════════════════════════════════════════════════════════════════════════
+    logger.info("Agent Live & Ready.")
 
 if __name__ == "__main__":
-    cli.run_app(WorkerOptions(
-        entrypoint_fnc=entrypoint,
-        agent_name="outbound-caller",
-    ))
+    cli.run_app(
+        WorkerOptions(
+            entrypoint_fnc=entrypoint,
+            agent_name="outbound-caller",
+            host="localhost", # Explicitly use localhost for local development
+            port=8081,        # Use a fixed port to avoid 0 bind permission issues
+            ws_url=os.getenv("LIVEKIT_URL") or fallback_config.get("LIVEKIT_URL"),
+            api_key=os.getenv("LIVEKIT_API_KEY") or fallback_config.get("LIVEKIT_API_KEY"),
+            api_secret=os.getenv("LIVEKIT_API_SECRET") or fallback_config.get("LIVEKIT_API_SECRET")
+        )
+    )

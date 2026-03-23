@@ -39,11 +39,12 @@ export async function POST(req: Request) {
 
         // 4. Set session cookie
         const userPayload = { id: userId, email };
-        await setCookieSession(userPayload);
+        const token = await setCookieSession(userPayload);
 
         return NextResponse.json({
             message: 'User created successfully',
             user: userPayload,
+            token,
         }, { status: 201 });
 
     } catch (error) {

@@ -389,15 +389,68 @@ function KnowledgeBasePanel({ files, setFiles }: { files: any[], setFiles: React
 }
 
 function AnalyticsPanel({
-    callSummary, setCallSummary,
+    callSummary, setCallSummary, agentId
 }: {
-    callSummary: boolean; setCallSummary: (v: boolean) => void;
+    callSummary: boolean; setCallSummary: (v: boolean) => void; agentId: string;
 }) {
-    const [activeTab, setActiveTab] = useState<'logs' | 'recordings'>('logs');
+    const [activeTab, setActiveTab] = useState<'logs' | 'reservations'>('logs');
+    const [logs, setLogs] = React.useState<any[]>([]);
+    const [reservations, setReservations] = React.useState<any[]>([]);
+    const [loading, setLoading] = React.useState(false);
+
+    const fetchData = useCallback(async () => {
+        if (!agentId) return;
+        setLoading(true);
+        try {
+            // 1. Fetch Call Logs
+            const logRes = await fetch(`/api/analytics?agent_id=${agentId}`);
+            const logData = await logRes.json();
+            if (logData.logs) setLogs(logData.logs);
+
+            // 2. Fetch Reservations
+            const resRes = await fetch(`http://localhost:8000/api/reservations?agent_id=${agentId}`);
+            const resData = await resRes.json();
+            if (Array.isArray(resData)) setReservations(resData);
+        } catch (err) {
+            console.error("Failed to fetch analytics:", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [agentId]);
+
+    React.useEffect(() => {
+        fetchData();
+        const interval = setInterval(fetchData, 10000); // Poll every 10s
+        return () => clearInterval(interval);
+    }, [fetchData]);
+
+    const formatDuration = (seconds?: number) => {
+        if (!seconds) return '--';
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+    };
+
+    const formatDate = (isoStr: string) => {
+        if (!isoStr) return '--';
+        try {
+            const date = new Date(isoStr);
+            return date.toLocaleString('en-IN', {
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: true
+            });
+        } catch (e) { return isoStr; }
+    };
 
     return (
         <Stack gap="24">
-            <SectionLabel>Call Analytics Settings</SectionLabel>
+            <Cluster justify="between">
+                <SectionLabel>Call Analytics Settings</SectionLabel>
+                {loading && <Text size="xs" tone="muted">Refreshing...</Text>}
+            </Cluster>
 
             <ToggleRow
                 id="callSummary"
@@ -417,10 +470,10 @@ function AnalyticsPanel({
                     📋 Call Logs
                 </button>
                 <button
-                    className={`${styles.analyticsTab} ${activeTab === 'recordings' ? styles.analyticsTabActive : ''}`}
-                    onClick={() => setActiveTab('recordings')}
+                    className={`${styles.analyticsTab} ${activeTab === 'reservations' ? styles.analyticsTabActive : ''}`}
+                    onClick={() => setActiveTab('reservations')}
                 >
-                    🎙️ Audio Recordings
+                    🗓️ Reservations
                 </button>
             </div>
 
@@ -438,38 +491,68 @@ function AnalyticsPanel({
                             </tr>
                         </thead>
                         <tbody>
-                            {SAMPLE_CALL_LOGS.map(log => (
+                            {logs.length > 0 ? logs.map((log, i) => (
                                 <tr key={log.id}>
-                                    <td className={styles.logId}>{log.id}</td>
-                                    <td>{log.from}</td>
-                                    <td>{log.duration}</td>
-                                    <td>{log.intent}</td>
-                                    <td className={styles.logTs}>{log.ts}</td>
+                                    <td className={styles.logId}>CL-{log.id.slice(0, 4)}</td>
+                                    <td>{log.caller_number || log.phone_number || 'Unknown'}</td>
+                                    <td>{formatDuration(log.duration)}</td>
+                                    <td>{log.intent || 'Unknown'}</td>
+                                    <td className={styles.logTs}>{formatDate(log.created_at)}</td>
                                     <td>
-                                        <span className={`${styles.statusBadge} ${styles[`status-${log.status}`]}`}>
-                                            {log.status}
+                                        <span className={`${styles.statusBadge} ${styles[`status-${log.status || 'resolved'}`]}`}>
+                                            {log.status || 'resolved'}
                                         </span>
                                     </td>
                                 </tr>
-                            ))}
+                            )) : (
+                                <tr>
+                                    <td colSpan={6} style={{ textAlign: 'center', padding: '24px', opacity: 0.5 }}>
+                                        No call logs found for this agent yet.
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>
             )}
 
-            {activeTab === 'recordings' && (
-                <Stack gap="8">
-                    {SAMPLE_RECORDINGS.map(rec => (
-                        <div key={rec.id} className={styles.recordingRow}>
-                            <div className={styles.recPlayBtn} aria-label="Play recording">▶</div>
-                            <div className={styles.recMeta}>
-                                <Text size="sm" weight="medium">{rec.label}</Text>
-                                <Text size="xs" tone="muted">{rec.duration} · {rec.size} · {rec.ts}</Text>
-                            </div>
-                            <button className={styles.recDownloadBtn} aria-label="Download recording">↓</button>
-                        </div>
-                    ))}
-                </Stack>
+            {activeTab === 'reservations' && (
+                <div className={styles.tableWrapper}>
+                    <table className={styles.logTable}>
+                        <thead>
+                            <tr>
+                                <th>Guest</th>
+                                <th>Phone</th>
+                                <th>Date/Time</th>
+                                <th>Guests</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {reservations.length > 0 ? reservations.map((res, i) => (
+                                <tr key={i}>
+                                    <td style={{ fontWeight: 500 }}>{res.customer_name}</td>
+                                    <td>{res.phone}</td>
+                                    <td className={styles.logTs}>
+                                        {res.date} at {res.time?.slice(0, 5)}
+                                    </td>
+                                    <td style={{ textAlign: 'center' }}>{res.guests}</td>
+                                    <td>
+                                        <Badge variant={res.status === 'confirmed' ? 'success' : 'neutral'}>
+                                            {res.status}
+                                        </Badge>
+                                    </td>
+                                </tr>
+                            )) : (
+                                <tr>
+                                    <td colSpan={5} style={{ textAlign: 'center', padding: '24px', opacity: 0.5 }}>
+                                        No reservations recorded yet.
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
             )}
         </Stack>
     );
@@ -601,7 +684,7 @@ export default function VoiceClientPage() {
                 const uid = d.user.id;
                 setUserId(uid);
                 // Fetch agent config
-                fetch(`/api/agent/get-config?userId=${uid}`, { cache: 'no-store' })
+                fetch(`/api/agent/get-config`, { cache: 'no-store' })
                     .then(r => r.json())
                     .then(res => {
                         if (res.error) {
@@ -609,18 +692,19 @@ export default function VoiceClientPage() {
                             return;
                         }
                         if (res.agent) {
-                            setAgentId(res.agent.id);
-                            if (res.agent.system_prompt) setPrompt(res.agent.system_prompt);
-                            if (res.agent.first_message) setFirstMsg(res.agent.first_message);
-                            if (res.agent.llm_model) setLlm(res.agent.llm_model);
-                            if (res.agent.stt_provider) setStt(res.agent.stt_provider);
-                            if (res.agent.tts_voice) setTts(res.agent.tts_voice);
-                            if (res.agent.transcription_enabled !== undefined && res.agent.transcription_enabled !== null) {
-                                setTranscribe(res.agent.transcription_enabled);
-                            }
-                            if (res.agent.wait_time !== undefined && res.agent.wait_time !== null) {
-                                setWaitTime(res.agent.wait_time);
-                            }
+                            const a = res.agent;
+                            setAgentId(a.id);
+                            if (a.system_prompt) setPrompt(a.system_prompt);
+                            if (a.first_message) setFirstMsg(a.first_message);
+                            if (a.llm_model) setLlm(a.llm_model);
+                            if (a.stt_provider) setStt(a.stt_provider);
+                            if (a.tts_voice) setTts(a.tts_voice);
+                            if (a.transcription_enabled !== undefined) setTranscribe(a.transcription_enabled);
+                            if (a.wait_time !== undefined) setWaitTime(a.wait_time);
+                            if (a.ai_disclosure !== undefined) setAiDisclosure(a.ai_disclosure);
+                            if (a.disclosure_text) setDisclosureText(a.disclosure_text);
+                            if (a.recording_announcement !== undefined) setRecordingAnnouncement(a.recording_announcement);
+                            if (a.recording_script) setRecordingScript(a.recording_script);
                         }
                         if (res.files && res.files.length > 0) {
                             const loadedFiles = res.files.map((f: any) => ({
@@ -647,7 +731,6 @@ export default function VoiceClientPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    user_id: userId,
                     agent_id: agentId,
                     system_prompt: prompt,
                     first_message: firstMsg,
@@ -655,7 +738,11 @@ export default function VoiceClientPage() {
                     stt_provider: stt,
                     tts_voice: tts,
                     transcription_enabled: transcribe,
-                    wait_time: waitTime
+                    wait_time: waitTime,
+                    ai_disclosure: aiDisclosure,
+                    disclosure_text: disclosureText,
+                    recording_announcement: recordingAnnouncement,
+                    recording_script: recordingScript
                 })
             }).catch(err => {
                 throw new Error("Step 1 (Config) Network Error: " + err.message);
@@ -799,7 +886,7 @@ export default function VoiceClientPage() {
                                 )}
                                 {activeTab === 'Knowledge Base' && <KnowledgeBasePanel files={files} setFiles={setFiles} />}
                                 {activeTab === 'Analytics' && (
-                                    <AnalyticsPanel callSummary={callSummary} setCallSummary={setCallSummary} />
+                                    <AnalyticsPanel callSummary={callSummary} setCallSummary={setCallSummary} agentId={agentId} />
                                 )}
                                 {activeTab === 'Compliance' && (
                                     <CompliancePanel

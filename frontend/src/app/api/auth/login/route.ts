@@ -22,8 +22,8 @@ export async function POST(req: Request) {
 
         if (!user) {
             return NextResponse.json(
-                { error: 'User does not exist. Please sign up first.' },
-                { status: 404 }
+                { error: 'Invalid email or password' },
+                { status: 401 }
             );
         }
 
@@ -38,11 +38,12 @@ export async function POST(req: Request) {
 
         // 3. Set session cookie
         const userPayload = { id: user.id, email: user.email };
-        await setCookieSession(userPayload);
+        const token = await setCookieSession(userPayload);
 
         return NextResponse.json({
             message: 'Logged in successfully',
             user: userPayload,
+            token,
         }, { status: 200 });
 
     } catch (error) {

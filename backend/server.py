@@ -4,6 +4,7 @@ import json
 import logging
 import uuid
 import bcrypt
+import asyncio
 from dotenv import load_dotenv
 from livekit.api import AccessToken, VideoGrants
 
@@ -194,53 +195,72 @@ async def upload_kb_file(
     file_url = f"/uploads/kb/{safe_filename}"
     
     # 2. Extract Text
-    text_extracted = extract_text(local_path, file.filename)
+    try:
+        text_extracted = extract_text(local_path, file.filename)
+    except Exception as e:
+        if os.path.exists(local_path): os.remove(local_path)
+        logger.error(f"Text extraction failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     
-    # NEW: Chunk Text & Embed
+    # 3. Chunk Text & Embed (Parallel)
     client = openai.AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    chunks = chunk_text(text_extracted, chunk_size=500)
+    # Use chunk_size=500, overlap=50 as suggested
+    chunks = chunk_text(text_extracted, chunk_size=500, overlap=50)
     
-    # 3. Save to database
+    if not chunks:
+        if os.path.exists(local_path): os.remove(local_path)
+        raise HTTPException(status_code=400, detail="No readable text found in file")
+
+    async def get_embedding(chunk_text):
+        resp = await client.embeddings.create(input=chunk_text, model="text-embedding-3-small")
+        return chunk_text, resp.data[0].embedding
+
+    # 4. Save to database
     db_url = os.getenv("DATABASE_URL")
     if not db_url:
         raise HTTPException(status_code=500, detail="Database URL not configured")
         
     try:
+        # Generate all embeddings in parallel
+        embedded_tasks = [get_embedding(c) for c in chunks]
+        results = await asyncio.gather(*embedded_tasks)
+        
         conn = await asyncpg.connect(db_url, ssl='require')
         
-        # Save file metadata
-        await conn.execute(
-            """
-            INSERT INTO knowledge_files (id, agent_id, file_name, file_url, created_at)
-            VALUES (CAST($1 AS uuid), CAST($2 AS uuid), $3, $4, NOW())
-            """,
-            file_id, agent_id, file.filename, file_url
-        )
-        
-        # Save vector chunks
-        for chunk in chunks:
-            chunk_id = str(uuid.uuid4())
-            resp = await client.embeddings.create(input=chunk, model="text-embedding-3-small")
-            embedding = resp.data[0].embedding
-            emb_str = f"[{','.join(str(f) for f in embedding)}]"
-            
+        async with conn.transaction():
+            # Save file metadata
             await conn.execute(
                 """
-                INSERT INTO knowledge_chunks (id, agent_id, content, embedding)
-                VALUES (CAST($1 AS uuid), CAST($2 AS uuid), $3, $4::vector)
+                INSERT INTO knowledge_files (id, agent_id, file_name, file_url, created_at)
+                VALUES (CAST($1 AS uuid), CAST($2 AS uuid), $3, $4, NOW())
                 """,
-                chunk_id, agent_id, chunk, emb_str
+                file_id, agent_id, file.filename, file_url
             )
+            
+            # Save vector chunks
+            for chunk_content, embedding in results:
+                chunk_id = str(uuid.uuid4())
+                emb_str = f"[{','.join(str(f) for f in embedding)}]"
+                
+                await conn.execute(
+                    """
+                    INSERT INTO knowledge_chunks (id, agent_id, content, embedding)
+                    VALUES (CAST($1 AS uuid), CAST($2 AS uuid), $3, $4::vector)
+                    """,
+                    chunk_id, agent_id, chunk_content, emb_str
+                )
             
         await conn.close()
     except Exception as e:
-        logger.error(f"Failed to insert into knowledge_files/chunks: {e}")
-        raise HTTPException(status_code=500, detail="Database insertion failed")
+        if os.path.exists(local_path): os.remove(local_path)
+        logger.error(f"Failed to process KB file: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process and store knowledge: {str(e)}")
         
     return {
         "status": "success",
         "file_id": file_id,
         "file_url": file_url,
+        "chunks_processed": len(chunks),
         "extracted_text_preview": text_extracted[:200] + "..." if len(text_extracted) > 200 else text_extracted
     }
 
