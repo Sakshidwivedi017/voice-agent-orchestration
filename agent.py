@@ -268,6 +268,14 @@ class AgentTools:
 
 async def entrypoint(ctx: JobContext):
     logger.info(f"--- [NEW JOB RECEIVED] ID: {ctx.job.id} Room: {ctx.room.name} ---")
+    try:
+        await _entrypoint_inner(ctx)
+    except Exception as exc:
+        logger.error(f"[ENTRYPOINT] Unhandled exception during job {ctx.job.id}: {exc}", exc_info=True)
+        raise  # re-raise so LiveKit marks the job as failed and assigns next one
+
+
+async def _entrypoint_inner(ctx: JobContext):
     
     # 1. Connect and Wait for Participant (Ensure call is established)
     await ctx.connect()
@@ -539,15 +547,39 @@ async def entrypoint(ctx: JobContext):
 
     logger.info("Agent Live & Ready.")
 
-if __name__ == "__main__":
-    cli.run_app(
-        WorkerOptions(
-            entrypoint_fnc=entrypoint,
-            agent_name="outbound-caller",
-            host="localhost", # Explicitly use localhost for local development
-            port=8081,        # Use a fixed port to avoid 0 bind permission issues
-            ws_url=os.getenv("LIVEKIT_URL") or fallback_config.get("LIVEKIT_URL"),
-            api_key=os.getenv("LIVEKIT_API_KEY") or fallback_config.get("LIVEKIT_API_KEY"),
-            api_secret=os.getenv("LIVEKIT_API_SECRET") or fallback_config.get("LIVEKIT_API_SECRET")
-        )
+def _build_worker_options() -> WorkerOptions:
+    return WorkerOptions(
+        entrypoint_fnc=entrypoint,
+        agent_name="outbound-caller",
+        host="localhost",  # Explicitly use localhost for local development
+        port=8081,         # Use a fixed port to avoid 0 bind permission issues
+        ws_url=os.getenv("LIVEKIT_URL") or fallback_config.get("LIVEKIT_URL"),
+        api_key=os.getenv("LIVEKIT_API_KEY") or fallback_config.get("LIVEKIT_API_KEY"),
+        api_secret=os.getenv("LIVEKIT_API_SECRET") or fallback_config.get("LIVEKIT_API_SECRET"),
     )
+
+
+if __name__ == "__main__":
+    RESTART_DELAY = 5  # seconds to wait before reconnecting after a crash
+
+    while True:
+        try:
+            logger.info("[AGENT] Starting LiveKit worker...")
+            cli.run_app(_build_worker_options())
+            # cli.run_app blocks until the worker stops cleanly (e.g. SIGTERM).
+            # If we reach here it means a clean shutdown was requested — exit.
+            logger.info("[AGENT] Worker stopped cleanly. Exiting.")
+            break
+        except KeyboardInterrupt:
+            logger.info("[AGENT] Keyboard interrupt received. Shutting down.")
+            break
+        except SystemExit as exc:
+            # cli.run_app may raise SystemExit(0) on clean stop.
+            if exc.code == 0:
+                logger.info("[AGENT] Clean SystemExit(0). Exiting.")
+                break
+            logger.warning(f"[AGENT] SystemExit({exc.code}) — restarting in {RESTART_DELAY}s...")
+            time.sleep(RESTART_DELAY)
+        except Exception as exc:
+            logger.error(f"[AGENT] Worker crashed: {exc}. Restarting in {RESTART_DELAY}s...", exc_info=True)
+            time.sleep(RESTART_DELAY)
