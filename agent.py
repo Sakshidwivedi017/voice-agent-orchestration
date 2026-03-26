@@ -291,9 +291,16 @@ async def _play_ambient_audio(room, audio_url: str, volume: float = 0.15):
                 async with http.get(audio_url) as resp:
                     audio_bytes = await resp.read()
         else:
-            logger.info(f"[AMBIENT] Loading local audio file: {audio_url}")
-            with open(audio_url, "rb") as f:
-                audio_bytes = f.read()
+            try:
+                logger.info(f"[AMBIENT] Loading local audio file: {audio_url}")
+                with open(audio_url, "rb") as f:
+                    audio_bytes = f.read()
+            except FileNotFoundError:
+                # Fallback to local filename only (for Docker/relative paths)
+                rel_path = audio_url.split("/")[-1]
+                logger.info(f"[AMBIENT] Retrying with relative path: {rel_path}")
+                with open(rel_path, "rb") as f:
+                    audio_bytes = f.read()
 
         source = rtc.AudioSource(sample_rate=24000, num_channels=1)
         track = rtc.LocalAudioTrack.create_audio_track("restaurant-ambient", source)
@@ -450,20 +457,19 @@ async def _entrypoint_inner(ctx: JobContext):
     # 2. Build Pipeline Components
     sarvam_key = os.getenv("SARVAM_API_KEY") or fallback_config.get("SARVAM_API_KEY")
 
-    # STT: Saaras v2 with language=hi-IN avoids per-utterance language detection (~150ms saved)
-    # Saaras handles English + Hindi seamlessly when language is set
+    # STT: Saaras v3 is the current standard for better Hinglish/Indian English
     stt_p = lk_sarvam.STT(
         language="hi-IN",
-        model="saaras:v2",
+        model="saaras:v3",
         flush_signal=True,
         api_key=sarvam_key
     )
 
-    # TTS: en-IN ensures numbers/phone numbers are ALWAYS spoken in English, not Hindi.
-    # meera (bulbul:v2) is the most natural-sounding Sarvam Indian female voice.
+    # TTS: meera on bulbul:v3 is one of the most natural Indian voices.
+    # We still use en-IN to ensure numbers come out in English.
     tts_p = lk_sarvam.TTS(
         target_language_code="en-IN",
-        model="bulbul:v2",
+        model="bulbul:v3",
         speaker="meera",
         api_key=sarvam_key
     )
