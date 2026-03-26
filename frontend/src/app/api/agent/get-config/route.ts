@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
             agent = agentResult.rows[0];
         } catch (e: any) {
             if (e.message.includes('column "ai_disclosure" does not exist')) {
-                console.warn("⚠️ Database schema is out of sync. Falling back to basic query. Run http://localhost:3000/api/z-setup-db to fix.");
+                console.warn("⚠️ Database schema is out of sync. Falling back to basic query. Run /api/z-setup-db to fix.");
                 const fallbackResult = await db.query(
                     `SELECT id, system_prompt, first_message, llm_model, stt_provider, tts_voice
                      FROM agents WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1`,

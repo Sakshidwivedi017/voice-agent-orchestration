@@ -19,6 +19,7 @@ import { useToast } from '@/components/ui/overlays/Toast';
 import styles from './page.module.css';
 
 // ─── Data ─────────────────────────────────────────────────────────────────────
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
 const LLM_MODELS = [
     { label: 'GPT-4o (OpenAI)', value: 'gpt-4o' },
@@ -408,7 +409,7 @@ function AnalyticsPanel({
             if (logData.logs) setLogs(logData.logs);
 
             // 2. Fetch Reservations
-            const resRes = await fetch(`http://localhost:8000/api/reservations?agent_id=${agentId}`);
+            const resRes = await fetch(`/api/reservations?agent_id=${agentId}`);
             const resData = await resRes.json();
             if (Array.isArray(resData)) setReservations(resData);
         } catch (err) {
@@ -761,7 +762,7 @@ export default function VoiceClientPage() {
                     const formData = new FormData();
                     formData.append('file', fileItem.fileObj);
                     formData.append('agent_id', newAgentId);
-                    const uRes = await fetch('http://localhost:8000/api/kb/upload', {
+                    const uRes = await fetch(`${BACKEND_URL}/api/kb/upload`, {
                         method: 'POST',
                         body: formData
                     }).catch(err => {
