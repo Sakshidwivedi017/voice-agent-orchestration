@@ -465,12 +465,12 @@ async def _entrypoint_inner(ctx: JobContext):
         api_key=sarvam_key
     )
 
-    # TTS: meera on bulbul:v3 in hi-IN mode creates the most natural Hinglish flow.
-    # She still handles English terms/numbers perfectly.
+    # TTS: neha on bulbul:v3 is one of the most professional and natural Indian voices.
+    # We use hi-IN to ensure maximum compatibility with the bulbul:v3 model.
     tts_p = lk_sarvam.TTS(
         target_language_code="hi-IN",
         model="bulbul:v3",
-        speaker="meera",
+        speaker="neha",
         api_key=sarvam_key
     )
 
