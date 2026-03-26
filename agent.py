@@ -91,9 +91,24 @@ def normalize_number(num: str) -> str:
     return num
 
 def normalize_indian_text(text: str) -> str:
-    """Normalize text for smoother Indian-English TTS pronunciation."""
+    """Refined Hinglish normalization for smoother Indian-English and Hindi pronunciation."""
     if not text: return ""
-    replacements = {
+    
+    # 1. Phonetic Spacing for Hinglish (prevents words rushing together)
+    hinglish_phonetics = {
+        "Haanji": "Haan ji",
+        "Aapka": "Aap ka",
+        "Karti": "Kar-ti",
+        "Bol": "Bole",
+        "Koshish": "Ko-shish",
+        "Swagat": "Swaa-gat",
+        "Dhanyawad": "Dhan-ya-vaad",
+        "Namaste": "Na-mas-te",
+        "Shukriya": "Shuk-riya",
+    }
+    
+    # 2. Common Abbreviation/Symbol fixes
+    general_replacements = {
         "Rs.": "Rupees",
         "INR": "Rupees",
         "AI": "A.I.",
@@ -105,12 +120,22 @@ def normalize_indian_text(text: str) -> str:
         "vs": "versus",
         "km": "kilometers",
         "kg": "kilograms",
+        "@": "at the rate",
     }
-    for k, v in replacements.items():
+    
+    # Apply replacements
+    for k, v in {**hinglish_phonetics, **general_replacements}.items():
         text = text.replace(k, v)
-    # Ensure punctuation ends sentences for breathing room
+        
+    # 3. Punctuation for Breathing (Ensures periods/commas for TTS pauses)
+    # Add commas before conjunctions/fillers for natural cadence
+    fillers = ["but", "and", "or", "haan ji", "okay", "sure"]
+    for f in fillers:
+        text = text.replace(f" {f} ", f", {f} ")
+
     if text and text[-1].isalnum():
         text += "."
+        
     return text
 
 def get_ist_time_context() -> str:
@@ -544,8 +569,17 @@ async def _entrypoint_inner(ctx: JobContext):
 
     # 6. Speak First Message
     if first_message:
-        logger.info(f"Speaking greeting: {first_message}")
-        await session.say(first_message, allow_interruptions=True)
+        normalized_greeting = normalize_indian_text(first_message)
+        logger.info(f"Speaking normalized greeting: {normalized_greeting}")
+        await session.say(normalized_greeting, allow_interruptions=True)
+
+    # 7. Apply Normalization to all dynamic speech
+    # This automatically intercepts agent text and normalizes it before TTS
+    @session.on("agent_speech_committed")
+    def on_speech(msg):
+        if hasattr(msg, 'content'):
+            msg.content = normalize_indian_text(msg.content)
+            logger.debug(f"[NORMALIZER] Applied to speech: {msg.content}")
 
     # --- REMOVED REDUNDANT LISTENERS (Caught before session start) ---
 
