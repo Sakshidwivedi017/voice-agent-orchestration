@@ -457,7 +457,7 @@ async def _entrypoint_inner(ctx: JobContext):
     # 2. Build Pipeline Components
     sarvam_key = os.getenv("SARVAM_API_KEY") or fallback_config.get("SARVAM_API_KEY")
 
-    # STT: Saaras v3 is the current standard for better Hinglish/Indian English
+    # STT: Saaras v3 in hi-IN mode handles English/Hindi/Hinglish best
     stt_p = lk_sarvam.STT(
         language="hi-IN",
         model="saaras:v3",
@@ -465,10 +465,10 @@ async def _entrypoint_inner(ctx: JobContext):
         api_key=sarvam_key
     )
 
-    # TTS: meera on bulbul:v3 is one of the most natural Indian voices.
-    # We still use en-IN to ensure numbers come out in English.
+    # TTS: meera on bulbul:v3 in hi-IN mode creates the most natural Hinglish flow.
+    # She still handles English terms/numbers perfectly.
     tts_p = lk_sarvam.TTS(
-        target_language_code="en-IN",
+        target_language_code="hi-IN",
         model="bulbul:v3",
         speaker="meera",
         api_key=sarvam_key
@@ -491,21 +491,21 @@ async def _entrypoint_inner(ctx: JobContext):
     )
 
     # 4. Initialize Session
-    # Silero VAD tuned for noisy office/restaurant environments:
-    #   activation_threshold=0.65 → only clear speech triggers VAD (ignores background chatter)
-    #   min_silence_duration=0.9  → requires longer silence before ending turn (prevents cut-offs)
-    #   min_speech_duration=0.15  → ignores very short noise bursts
+    # Silero VAD tuned for responsive Indian service bot:
+    #   activation_threshold=0.5 → Sensitive enough for mobile/office calls
+    #   min_silence_duration=0.8 → Natural pause before agent replies
+    #   min_speech_duration=0.1  → Ignores short clicks/noises
     vad = silero.VAD.load(
-        activation_threshold=0.65,
-        min_silence_duration=0.9,
-        min_speech_duration=0.15,
-        padding_duration=0.1,
+        activation_threshold=0.5,
+        min_silence_duration=0.8,
+        min_speech_duration=0.1,
+        prefix_padding_duration=0.2,
     )
     session = AgentSession(
-        turn_detection="stt",
+        turn_detection="vad",        # Faster response than STT-based detection
         vad=vad,
-        min_endpointing_delay=0.4,   # Fast response — VAD handles noise gating
-        max_endpointing_delay=6.0,    # Don't wait more than 6s for user to continue
+        min_endpointing_delay=0.4,   # Fast response gating
+        max_endpointing_delay=5.0,
         allow_interruptions=True,
     )
 
@@ -661,8 +661,6 @@ def _build_worker_options() -> WorkerOptions:
     return WorkerOptions(
         entrypoint_fnc=entrypoint,
         agent_name="outbound-caller",
-        host="localhost",  # Explicitly use localhost for local development
-        port=8081,         # Use a fixed port to avoid 0 bind permission issues
         ws_url=os.getenv("LIVEKIT_URL") or fallback_config.get("LIVEKIT_URL"),
         api_key=os.getenv("LIVEKIT_API_KEY") or fallback_config.get("LIVEKIT_API_KEY"),
         api_secret=os.getenv("LIVEKIT_API_SECRET") or fallback_config.get("LIVEKIT_API_SECRET"),
