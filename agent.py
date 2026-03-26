@@ -465,12 +465,12 @@ async def _entrypoint_inner(ctx: JobContext):
         api_key=sarvam_key
     )
 
-    # TTS: neha on bulbul:v3 is one of the most professional and natural Indian voices.
-    # We use hi-IN to ensure maximum compatibility with the bulbul:v3 model.
+    # TTS: simran on bulbul:v3 with 1.1x pace (as requested) sounds natural and fast.
     tts_p = lk_sarvam.TTS(
         target_language_code="hi-IN",
         model="bulbul:v3",
-        speaker="neha",
+        speaker="simran",
+        pace=1.1,
         api_key=sarvam_key
     )
 
