@@ -19,7 +19,7 @@ from livekit.agents import (
     llm,
 )
 from livekit.agents.voice import Agent, AgentSession
-from livekit.plugins import openai as lk_openai, sarvam as lk_sarvam
+from livekit.plugins import openai as lk_openai, sarvam as lk_sarvam, silero
 
 load_dotenv()
 
@@ -28,12 +28,23 @@ logger = logging.getLogger("outbound-agent")
 logger.setLevel(logging.DEBUG)
 
 # Load fallback config for environments where .env is unreadable
+# MUST be loaded before get_openai_client() is called
 fallback_config = {}
 try:
     with open("/Users/sakshi/Downloads/voice-agent/config_fixed.json", "r") as f:
         fallback_config = json.load(f)
 except Exception:
     pass
+
+# ── CACHED OPENAI CLIENT (avoid per-request instantiation) ───────────────────
+_openai_client: openai.AsyncOpenAI | None = None
+
+def get_openai_client() -> openai.AsyncOpenAI:
+    global _openai_client
+    if _openai_client is None:
+        key = os.getenv("OPENAI_API_KEY") or fallback_config.get("OPENAI_API_KEY", "")
+        _openai_client = openai.AsyncOpenAI(api_key=key)
+    return _openai_client
 
 # File logger for debugging
 log_dir = os.getenv("LOG_DIR", "logs")
@@ -116,30 +127,25 @@ def get_ist_time_context() -> str:
 # ══════════════════════════════════════════════════════════════════════════════
 
 class AgentTools:
-    def __init__(self, agent_id: str, caller_phone: str):
+    def __init__(self, agent_id: str, caller_phone: str, pool: asyncpg.Pool):
         self.agent_id = agent_id
         self.caller_phone = caller_phone
+        self.pool = pool
 
     @llm.function_tool(description="Search the hotel/restaurant knowledge base for menu, hours, or general info.")
     async def search_knowledge_base(self, query: Annotated[str, "The user's question"]) -> str:
         logger.info(f"[TOOL] RAG query: {query}")
         try:
-            key = os.getenv("OPENAI_API_KEY") or fallback_config.get("OPENAI_API_KEY")
-            client = openai.AsyncOpenAI(api_key=key)
+            client = get_openai_client()
             resp = await client.embeddings.create(input=query, model="text-embedding-3-small")
             emb = resp.data[0].embedding
             emb_str = f"[{','.join(str(f) for f in emb)}]"
             
-            db_url = os.getenv("DATABASE_URL")
-            if not db_url and "DATABASE_URL" in fallback_config:
-                db_url = fallback_config["DATABASE_URL"]
-            
-            conn = await asyncpg.connect(db_url, ssl='require')
-            rows = await conn.fetch(
-                "SELECT content FROM knowledge_chunks WHERE agent_id = CAST($1 AS uuid) ORDER BY embedding <-> $2::vector LIMIT 3",
-                self.agent_id, emb_str
-            )
-            await conn.close()
+            async with self.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT content FROM knowledge_chunks WHERE agent_id = CAST($1 AS uuid) ORDER BY embedding <-> $2::vector LIMIT 3",
+                    self.agent_id, emb_str
+                )
             knowledge = "\n".join([r['content'] for r in rows])
             return knowledge if knowledge else "No specific info found in knowledge base."
         except Exception as e:
@@ -163,14 +169,12 @@ class AgentTools:
             else:
                 dt_time = datetime.strptime(time_str, "%H:%M:%S").time()
 
-            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
-            conn = await asyncpg.connect(db_url, ssl='require')
-            await conn.execute(
-                "INSERT INTO reservations (agent_id, customer_name, phone, date, time, guests, status, special_request) "
-                "VALUES (CAST($1 AS uuid), $2, $3, $4, $5, $6, 'confirmed', $7)",
-                self.agent_id, name, final_phone, dt_date, dt_time, int(guests), special_req
-            )
-            await conn.close()
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    "INSERT INTO reservations (agent_id, customer_name, phone, date, time, guests, status, special_request) "
+                    "VALUES (CAST($1 AS uuid), $2, $3, $4, $5, $6, 'confirmed', $7)",
+                    self.agent_id, name, final_phone, dt_date, dt_time, int(guests), special_req
+                )
             logger.info(f"[DB-SUCCESS] Reservation saved for {name} (Agent: {self.agent_id})")
             return f"Success! Reservation confirmed for {name} on {date} at {time} for {guests} guests."
         except Exception as e:
@@ -183,8 +187,6 @@ class AgentTools:
         try:
             from datetime import datetime
             search_phone = phone or self.caller_phone
-            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
-            conn = await asyncpg.connect(db_url, ssl='require')
             
             query = "SELECT id, customer_name, date, time, guests FROM reservations WHERE agent_id = CAST($1 AS uuid) AND phone = $2"
             args = [self.agent_id, search_phone]
@@ -198,8 +200,8 @@ class AgentTools:
                 args.append(dt_date)
             
             query += " ORDER BY created_at DESC LIMIT 1"
-            row = await conn.fetchrow(query, *args)
-            await conn.close()
+            async with self.pool.acquire() as conn:
+                row = await conn.fetchrow(query, *args)
             
             if row:
                 return (f"Found reservation: ID {row['id']}, Name: {row['customer_name']}, "
@@ -214,9 +216,6 @@ class AgentTools:
     async def update_reservation(self, res_id: str, date: str = "", time: str = "", guests: int = 0) -> str:
         try:
             from datetime import datetime
-            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
-            conn = await asyncpg.connect(db_url, ssl='require')
-            
             updates = []
             args = [res_id]
             i = 2
@@ -243,8 +242,8 @@ class AgentTools:
                 return "No updates provided."
                 
             query = f"UPDATE reservations SET {', '.join(updates)} WHERE id = CAST($1 AS uuid)"
-            await conn.execute(query, *args)
-            await conn.close()
+            async with self.pool.acquire() as conn:
+                await conn.execute(query, *args)
             return "Success! The reservation has been updated."
         except Exception as e:
             logger.error(f"[UPDATE ERR] {e}")
@@ -253,13 +252,11 @@ class AgentTools:
     @llm.function_tool(description="Cancel an existing reservation using the ID found via get_reservation.")
     async def cancel_reservation(self, res_id: str) -> str:
         try:
-            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
-            conn = await asyncpg.connect(db_url, ssl='require')
-            await conn.execute(
-                "UPDATE reservations SET status = 'cancelled' WHERE id = CAST($1 AS uuid)",
-                res_id
-            )
-            await conn.close()
+            async with self.pool.acquire() as conn:
+                await conn.execute(
+                    "UPDATE reservations SET status = 'cancelled' WHERE id = CAST($1 AS uuid)",
+                    res_id
+                )
             return "Success! The reservation has been cancelled."
         except Exception as e:
             logger.error(f"[CANCEL ERR] {e}")
@@ -325,37 +322,42 @@ async def _entrypoint_inner(ctx: JobContext):
                 # If only caller number found, we still don't have a DID
                 logger.warning(f"[FALLBACK] Room name only contained caller number ({caller_phone}). Still no DID.")
     
-# Database Lookup for Agent Configuration
+# Database Connection Pool (reused across all tools for this call)
     db_url = os.getenv("DATABASE_URL")
     if not db_url and "DATABASE_URL" in fallback_config:
         db_url = fallback_config["DATABASE_URL"]
 
+    pool = None
+    try:
+        pool = await asyncpg.create_pool(db_url, ssl='require', min_size=2, max_size=5)
+        logger.info("[DB-POOL] ✅ Connection pool created")
+    except Exception as e:
+        logger.error(f"[DB ERROR] Pool creation failed: {e}")
+
     row = None
     try:
-        conn = await asyncpg.connect(db_url, ssl='require')
-        if agent_did:
-            # Normal Lookup
-            row = await conn.fetchrow(
-                "SELECT a.id, a.system_prompt, a.first_message FROM agents a "
-                "JOIN phone_numbers p ON a.id = p.agent_id "
-                "WHERE p.phone_number = $1 OR p.phone_number LIKE $2", 
-                agent_did, f"%{agent_did[-10:]}"
-            )
-            if not row:
-                # Direct agent search
+        async with pool.acquire() as conn:
+            if agent_did:
+                # Normal Lookup
                 row = await conn.fetchrow(
-                    "SELECT id, system_prompt, first_message FROM agents WHERE phone_number_id::text LIKE $1 LIMIT 1",
-                    f"%{agent_did[-10:]}"
+                    "SELECT a.id, a.system_prompt, a.first_message FROM agents a "
+                    "JOIN phone_numbers p ON a.id = p.agent_id "
+                    "WHERE p.phone_number = $1 OR p.phone_number LIKE $2", 
+                    agent_did, f"%{agent_did[-10:]}"
                 )
-        
-        if not row:
-            # Deep Fallback: most recent agent
-            logger.warning("[FALLBACK] Could not resolve identity, fetching latest agent.")
-            row = await conn.fetchrow("SELECT id, system_prompt, first_message FROM agents ORDER BY created_at DESC LIMIT 1")
-        
-        await conn.close()
+                if not row:
+                    # Direct agent search
+                    row = await conn.fetchrow(
+                        "SELECT id, system_prompt, first_message FROM agents WHERE phone_number_id::text LIKE $1 LIMIT 1",
+                        f"%{agent_did[-10:]}"
+                    )
+            
+            if not row:
+                # Deep Fallback: most recent agent
+                logger.warning("[FALLBACK] Could not resolve identity, fetching latest agent.")
+                row = await conn.fetchrow("SELECT id, system_prompt, first_message FROM agents ORDER BY created_at DESC LIMIT 1")
     except Exception as e:
-        logger.error(f"[DB ERROR] Connection failed: {e}")
+        logger.error(f"[DB ERROR] Agent lookup failed: {e}")
 
     if not row:
         logger.error(f"[CRITICAL] Could not resolve any agent for this call.")
@@ -397,7 +399,7 @@ async def _entrypoint_inner(ctx: JobContext):
     openai_key = os.getenv("OPENAI_API_KEY") or fallback_config.get("OPENAI_API_KEY")
     llm_p = lk_openai.LLM(model="gpt-4o-mini", api_key=openai_key)
     
-    tools_obj = AgentTools(agent_id, caller_phone)
+    tools_obj = AgentTools(agent_id, caller_phone, pool)
     tools = llm.find_function_tools(tools_obj)
     logger.info(f"[AGENT] Registered {len(tools)} tools")
     
@@ -411,9 +413,12 @@ async def _entrypoint_inner(ctx: JobContext):
     )
 
     # 4. Initialize Session
+    # Silero VAD improves turn-end detection on noisy SIP/mobile calls
+    vad = silero.VAD.load()
     session = AgentSession(
-        turn_detection="stt", 
-        min_endpointing_delay=1.0, # Increased for better natural turn-taking
+        turn_detection="stt",
+        vad=vad,
+        min_endpointing_delay=0.5,  # Reduced from 1.0 — cuts ~500ms response delay
     )
 
     # --- CALL LOGGING & TRANSCRIPTION SETUP ---
@@ -453,6 +458,11 @@ async def _entrypoint_inner(ctx: JobContext):
         end_time = datetime.now()
         duration = int((end_time - start_time).total_seconds())
         
+        # Close the DB pool when the call ends
+        if pool:
+            await pool.close()
+            logger.info("[DB-POOL] Connection pool closed.")
+        
         # 1. Capture Full Transcript from the Assistant's actual Chat Context (Memory)
         # This is the single most reliable way to get the entire history.
         chat_history = []
@@ -489,9 +499,8 @@ async def _entrypoint_inner(ctx: JobContext):
             )
             
             try:
-                # Generate summary with a quick LLM call using the raw OpenAI client
-                # This avoids awaiting the LLMStream object which is not supported in the LiveKit wrapper
-                client = openai.AsyncOpenAI(api_key=openai_key)
+                # Generate summary with a quick LLM call using the cached OpenAI client
+                client = get_openai_client()
                 resp = await client.chat.completions.create(
                     model="gpt-4o-mini",
                     messages=[{"role": "user", "content": summary_prompt}]
@@ -532,18 +541,19 @@ async def _entrypoint_inner(ctx: JobContext):
                 resolved_caller = normalize_number(getattr(participant, "identity", "unknown"))
 
             # Save to Database with correct mapping and IST Time (Simple naive datetime per system clock)
-            db_url = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
-            now_ist = datetime.now() 
+            now_ist = datetime.now()
             
-            conn = await asyncpg.connect(db_url, ssl='require')
-            await conn.execute(
+            # Use a fresh single connection for shutdown (pool may already be closing)
+            db_url_log = os.getenv("DATABASE_URL") or fallback_config.get("DATABASE_URL")
+            log_conn = await asyncpg.connect(db_url_log, ssl='require')
+            await log_conn.execute(
                 """
                 INSERT INTO call_logs (agent_id, caller_number, phone_number, duration, intent, summary, transcript, created_at, status)
                 VALUES (CAST($1 AS uuid), $2, $3, $4, $5, $6, $7, $8, 'resolved')
                 """,
                 agent_id, resolved_caller, agent_did, duration, intent, summary, full_transcript, now_ist
             )
-            await conn.close()
+            await log_conn.close()
             logger.info(f"✅ Call Log successfully saved for {resolved_caller} at {now_ist} (Intent: {intent})")
         except Exception as e:
             logger.error(f"❌ Failed to save call log to DB: {e}")
