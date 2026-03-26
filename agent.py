@@ -4,6 +4,7 @@ import os
 import re
 import json
 import time
+import io
 from typing import Annotated
 from datetime import datetime, timedelta
 import pytz
@@ -266,7 +267,74 @@ class AgentTools:
 # ── ENTRYPOINT ──────────────────────────────────────────────────────────────
 # ══════════════════════════════════════════════════════════════════════════════
 
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ── AMBIENT BACKGROUND AUDIO ─────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def _play_ambient_audio(room, audio_url: str, volume: float = 0.15):
+    """
+    Load an ambient audio file (local path or HTTP URL) and loop it as a
+    background track in the LiveKit room so the caller hears restaurant ambience.
+    Volume is a gain multiplier: 0.15 = 15% of original (subtle background).
+    Set AMBIENT_AUDIO_URL in .env to a local file path or HTTP URL to enable.
+    """
+    try:
+        import av
+        from livekit import rtc
+
+        # Support both local file paths and remote HTTP URLs
+        if audio_url.startswith("http://") or audio_url.startswith("https://"):
+            import aiohttp
+            logger.info(f"[AMBIENT] Fetching audio from URL: {audio_url}")
+            async with aiohttp.ClientSession() as http:
+                async with http.get(audio_url) as resp:
+                    audio_bytes = await resp.read()
+        else:
+            logger.info(f"[AMBIENT] Loading local audio file: {audio_url}")
+            with open(audio_url, "rb") as f:
+                audio_bytes = f.read()
+
+        source = rtc.AudioSource(sample_rate=24000, num_channels=1)
+        track = rtc.LocalAudioTrack.create_audio_track("restaurant-ambient", source)
+        pub_opts = rtc.TrackPublishOptions(source=rtc.TrackSource.SOURCE_MICROPHONE)
+        await room.local_participant.publish_track(track, pub_opts)
+        logger.info("[AMBIENT] Published background audio track.")
+
+        SAMPLES_PER_CHUNK = 2400  # 100ms of audio at 24kHz
+
+        while True:
+            container = av.open(io.BytesIO(audio_bytes))
+            resampler = av.audio.resampler.AudioResampler(
+                format='s16',
+                layout='mono',
+                rate=24000,
+            )
+            for packet in container.demux(audio=0):
+                for frame in packet.decode():
+                    for resampled in resampler.resample(frame):
+                        samples = resampled.to_ndarray().flatten()
+                        # Apply volume reduction so ambient doesn't overpower voice
+                        samples = (samples * volume).astype('int16')
+                        # Send in 100ms chunks
+                        for i in range(0, len(samples), SAMPLES_PER_CHUNK):
+                            chunk = samples[i:i + SAMPLES_PER_CHUNK]
+                            audio_frame = rtc.AudioFrame(
+                                data=chunk.tobytes(),
+                                sample_rate=24000,
+                                num_channels=1,
+                                samples_per_channel=len(chunk),
+                            )
+                            await source.capture_frame(audio_frame)
+                            await asyncio.sleep(len(chunk) / 24000)
+            # Loop: restart from beginning when file ends
+            logger.debug("[AMBIENT] Audio loop restarting.")
+    except Exception as e:
+        logger.warning(f"[AMBIENT] Background audio failed (non-critical): {e}")
+
+
 async def entrypoint(ctx: JobContext):
+
     logger.info(f"--- [NEW JOB RECEIVED] ID: {ctx.job.id} Room: {ctx.room.name} ---")
     try:
         await _entrypoint_inner(ctx)
@@ -380,29 +448,33 @@ async def _entrypoint_inner(ctx: JobContext):
     )
     
     # 2. Build Pipeline Components
-    # Using Saaras v3 which is optimized for Hinglish/Indian languages
     sarvam_key = os.getenv("SARVAM_API_KEY") or fallback_config.get("SARVAM_API_KEY")
+
+    # STT: Saaras v2 with language=hi-IN avoids per-utterance language detection (~150ms saved)
+    # Saaras handles English + Hindi seamlessly when language is set
     stt_p = lk_sarvam.STT(
-        language="unknown", 
-        model="saaras:v3",
-        flush_signal=True, # critical for turn detection in 1.4.x
+        language="hi-IN",
+        model="saaras:v2",
+        flush_signal=True,
         api_key=sarvam_key
     )
-    # Using Bulbul v3 with Kavya voice
+
+    # TTS: en-IN ensures numbers/phone numbers are ALWAYS spoken in English, not Hindi.
+    # meera (bulbul:v2) is the most natural-sounding Sarvam Indian female voice.
     tts_p = lk_sarvam.TTS(
-        target_language_code="hi-IN",
-        model="bulbul:v3",
-        speaker="kavya",
+        target_language_code="en-IN",
+        model="bulbul:v2",
+        speaker="meera",
         api_key=sarvam_key
     )
-    # Using LLM with fallback api_key
+
     openai_key = os.getenv("OPENAI_API_KEY") or fallback_config.get("OPENAI_API_KEY")
     llm_p = lk_openai.LLM(model="gpt-4o-mini", api_key=openai_key)
-    
+
     tools_obj = AgentTools(agent_id, caller_phone, pool)
     tools = llm.find_function_tools(tools_obj)
     logger.info(f"[AGENT] Registered {len(tools)} tools")
-    
+
     # 3. Create Agent
     assistant = Agent(
         instructions=final_prompt,
@@ -413,12 +485,22 @@ async def _entrypoint_inner(ctx: JobContext):
     )
 
     # 4. Initialize Session
-    # Silero VAD improves turn-end detection on noisy SIP/mobile calls
-    vad = silero.VAD.load()
+    # Silero VAD tuned for noisy office/restaurant environments:
+    #   activation_threshold=0.65 → only clear speech triggers VAD (ignores background chatter)
+    #   min_silence_duration=0.9  → requires longer silence before ending turn (prevents cut-offs)
+    #   min_speech_duration=0.15  → ignores very short noise bursts
+    vad = silero.VAD.load(
+        activation_threshold=0.65,
+        min_silence_duration=0.9,
+        min_speech_duration=0.15,
+        padding_duration=0.1,
+    )
     session = AgentSession(
         turn_detection="stt",
         vad=vad,
-        min_endpointing_delay=0.5,  # Reduced from 1.0 — cuts ~500ms response delay
+        min_endpointing_delay=0.4,   # Fast response — VAD handles noise gating
+        max_endpointing_delay=6.0,    # Don't wait more than 6s for user to continue
+        allow_interruptions=True,
     )
 
     # --- CALL LOGGING & TRANSCRIPTION SETUP ---
@@ -441,11 +523,20 @@ async def _entrypoint_inner(ctx: JobContext):
             logger.debug(f"[TRANSCRIPT] Agent: {text}")
             transcript_segments.append(f"Agent: {text}")
 
-    # 4. Start Session (Managed by AgentSession in 1.4.x)
+    # 4. Start Session
     logger.info("Starting agent session...")
     await session.start(agent=assistant, room=ctx.room)
-    
-    # 5. Speak First Message
+
+    # 5. Background ambient restaurant noise
+    # Runs as a background task — loops a restaurant ambience audio URL
+    ambient_url = os.getenv("AMBIENT_AUDIO_URL", "")
+    if ambient_url:
+        asyncio.create_task(_play_ambient_audio(ctx.room, ambient_url))
+        logger.info(f"[AMBIENT] Started background audio: {ambient_url}")
+    else:
+        logger.info("[AMBIENT] No AMBIENT_AUDIO_URL set — skipping background audio.")
+
+    # 6. Speak First Message
     if first_message:
         logger.info(f"Speaking greeting: {first_message}")
         await session.say(first_message, allow_interruptions=True)
