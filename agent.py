@@ -36,7 +36,10 @@ except Exception:
     pass
 
 # File logger for debugging
-LOG_FILE = "/Users/sakshi/Downloads/voice-agent/agent_debug.log"
+log_dir = os.getenv("LOG_DIR", "logs")
+os.makedirs(log_dir, exist_ok=True)
+LOG_FILE = os.path.join(log_dir, os.getenv("LOG_FILE", "agent_debug.log"))
+
 fh = logging.FileHandler(LOG_FILE)
 fh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 logger.addHandler(fh)
