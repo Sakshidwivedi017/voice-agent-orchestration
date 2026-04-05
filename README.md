@@ -8,24 +8,126 @@ Vaani is a full-stack platform that enables businesses to deploy AI-powered voic
 
 ## Table of Contents
 
-1. [High-Level Architecture](#high-level-architecture)
-2. [Project Structure](#project-structure)
-3. [Core Components](#core-components)
+1. [Dashboard & Demo](#dashboard--demo)
+2. [Multi-Tenant Architecture](#multi-tenant-architecture)
+3. [High-Level Architecture](#high-level-architecture)
+4. [Project Structure](#project-structure)
+5. [Core Components](#core-components)
    - [Agent (`agent.py`)](#agent-agentpy)
    - [Backend (`backend/`)](#backend-backend)
    - [Frontend (`frontend/`)](#frontend-frontend)
-4. [AI & Voice Pipeline](#ai--voice-pipeline)
-5. [Database Schema (Key Tables)](#database-schema-key-tables)
-6. [API Reference](#api-reference)
-7. [Agent Tools](#agent-tools)
-8. [Knowledge Base (RAG)](#knowledge-base-rag)
-9. [Call Logging & Analytics](#call-logging--analytics)
-10. [Authentication & Session Management](#authentication--session-management)
-11. [Ambient Audio](#ambient-audio)
-12. [Deployment](#deployment)
-13. [Environment Variables](#environment-variables)
-14. [Local Development](#local-development)
-15. [Technology Stack](#technology-stack)
+6. [AI & Voice Pipeline](#ai--voice-pipeline)
+7. [Database Schema (Key Tables)](#database-schema-key-tables)
+8. [API Reference](#api-reference)
+9. [Agent Tools](#agent-tools)
+10. [Knowledge Base (RAG)](#knowledge-base-rag)
+11. [Call Logging & Analytics](#call-logging--analytics)
+12. [Authentication & Session Management](#authentication--session-management)
+13. [Ambient Audio](#ambient-audio)
+14. [Deployment](#deployment)
+15. [Environment Variables](#environment-variables)
+16. [Local Development](#local-development)
+17. [Technology Stack](#technology-stack)
+
+---
+
+## Dashboard & Demo
+
+Each business that deploys Vaani gets a **fully isolated, branded dashboard** where they can configure their AI agent, monitor live call activity, manage reservations, and upload knowledge base documents — all without touching any code.
+
+### 🌐 Platform Landing Page
+> The public-facing IMADGEN homepage with product verticals, brand showcase, and an embedded AI chat interface.
+
+![Platform Front Page](./assets/front_page.jpg)
+
+---
+
+### 🧠 Agent Behavior Configuration
+> Each operator customises their agent's personality, system prompt, first greeting message, language, voice, and response style from this panel. Changes take effect on the next call immediately.
+
+![Agent Behavior Page](./assets/behavior_page.jpg)
+
+---
+
+### 📚 Knowledge Base Management
+> Operators upload business-specific documents (PDF, PPTX, DOCX, TXT, CSV). The system automatically extracts, chunks, and embeds the content so the voice agent can answer caller questions using RAG (Retrieval-Augmented Generation).
+
+![Knowledge Base Page](./assets/kb_page.jpg)
+
+---
+
+### 📅 Reservations Dashboard
+> Every booking made during a live call is captured in real time and displayed here. Operators can see customer name, date, time, guest count, special requests, and booking status (`confirmed` / `cancelled`).
+
+![Reservations Page](./assets/reservation_page.jpg)
+
+---
+
+### 📞 Call Logs & Analytics
+> A full log of every call — caller number, duration, LLM-generated intent classification, one-sentence summary, and the complete conversation transcript. This gives operators full visibility into what their AI handled.
+
+![Call Logs Page](./assets/call_logs.jpg)
+
+---
+
+### 🗄️ Database Architecture
+> The underlying multi-tenant database schema showing how agents, phone numbers, reservations, call logs, and knowledge base chunks are structured and related.
+
+![Database Architecture](./assets/db_architecture.jpg)
+
+---
+
+### 🎥 Live Demo — AI Voice Agent in Action
+
+> Watch the AI agent pick up a real phone call, greet the caller in natural Hinglish, handle a reservation request using tool calls, and log the entire interaction — all without any human involvement.
+
+<!-- 📌 Replace the link below with your actual Google Drive / YouTube share link -->
+**[▶ Watch Demo Call Recording](YOUR_GOOGLE_DRIVE_LINK_HERE)**
+
+> *In the demo: The caller asks to book a table for 4 people → the agent collects name, date, and time → calls `save_reservation` → confirms the booking → the reservation appears live on the dashboard.*
+
+---
+
+## Multi-Tenant Architecture
+
+Vaani is built as a **true multi-tenant platform** — every business (tenant) operates in complete isolation with their own phone number, agent configuration, knowledge base, reservations, and call history. No data is ever shared between tenants.
+
+### How It Works
+
+```
+Business A (Restaurant)          Business B (Hotel)           Business C (Clinic)
+   │                                  │                              │
+   ├── Phone: +91 98765 00001         ├── Phone: +91 98765 00002     ├── Phone: +91 98765 00003
+   ├── System Prompt: "You are        ├── System Prompt: "You are    ├── System Prompt: "You are
+   │   Priya, a restaurant host..."   │   Raj, a hotel concierge..." │   a clinic receptionist..."
+   ├── First Message: "Namaste!        ├── First Message: "Welcome     ├── First Message: "Hello,
+   │   Welcome to Spice Garden"       │   to Grand Orchid Hotel"     │   City Health Clinic"
+   ├── Knowledge Base: menu.pdf       ├── Knowledge Base: services.pdf├── Knowledge Base: faq.pdf
+   ├── Reservations: [their calls]    ├── Reservations: [their calls] ├── Appointments: [their calls]
+   └── Call Logs: [their history]     └── Call Logs: [their history]  └── Call Logs: [their history]
+```
+
+### Isolation at Every Layer
+
+| Layer | How Isolation Is Enforced |
+|-------|---------------------------|
+| **Phone Number** | Each agent is assigned a unique DID (Direct Inward Dialing) number in the `phone_numbers` table. Incoming calls are routed to the correct agent by matching the dialed number. |
+| **Agent Config** | System prompt, greeting, and voice settings are stored per `agent_id` in the `agents` table. Each business has a completely different agent personality and behaviour. |
+| **Knowledge Base** | All KB chunks in `knowledge_chunks` are scoped by `agent_id`. A semantic search query from Business A's agent will **never** return content from Business B's KB. |
+| **Reservations** | Every booking is tagged with `agent_id`. The dashboard only ever shows reservations for the logged-in operator's agent. |
+| **Call Logs** | Every call log is tagged with `agent_id` and `phone_number`. Analytics are completely separate per tenant. |
+| **Authentication** | JWT sessions tied to `user_id`. The middleware injects `x-user-id` into every API request, and all DB queries filter by that user's `agent_id`. |
+
+### Onboarding a New Business
+
+1. Business owner **signs up** at `/auth` → gets a unique `user_id`
+2. They **configure their agent** at `/voice-client` → sets system prompt, greeting, and voice
+3. A unique **phone number (DID)** is assigned and mapped to their `agent_id` in the database
+4. They **upload their knowledge base** (menu, FAQ, policies PDF)
+5. The **LiveKit agent worker** automatically routes all calls to that DID → the correct configured agent
+6. **Dashboard updates in real time** — every call, booking, and inquiry appears in their private dashboard
+
+> Each business owner only ever sees *their own* data. The system is horizontally scalable — adding a new tenant requires only a new row in `agents` and `phone_numbers`.
 
 ---
 
