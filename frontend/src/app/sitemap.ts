@@ -1,16 +1,11 @@
 import { MetadataRoute } from 'next'
 
 export default function sitemap(): MetadataRoute.Sitemap {
-    const baseUrl = 'https://imadgen.ai'
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://your-domain.com'
 
-    // Core pages
     const routes = [
         '',
-        '/about',
-        '/agents',
-        '/chat',
-        '/os',
-        '/studio',
+        '/auth',
     ]
 
     return routes.map((route) => ({
