@@ -33,43 +33,43 @@ Vaani is a full-stack platform that enables businesses to deploy AI-powered voic
 
 ```
 Caller's Phone
-      │  (SIP/PSTN via Exotel / VoBiz)
+      │  (SIP/PSTN via Exotel)
       ▼
-LiveKit SIP Gateway ──────────────────────────────────────────┐
-      │                                                        │
-      ▼                                                        │
- agent.py (LiveKit Worker)                                     │
-  ├── STT  :  Sarvam Saaras v3  (hi-IN, Hinglish-aware)      │
-  ├── LLM  :  OpenAI GPT-4o-mini                              │
-  ├── TTS  :  Sarvam Bulbul v3  (Simran voice, 1.1× pace)    │
-  ├── VAD  :  Silero (voice activity detection)               │
-  └── Tools:  save_reservation / get_reservation /            │
-              search_knowledge_base / cancel / update          │
-      │                                                        │
-      ├── asyncpg → Supabase Postgres (pgvector enabled)      │
-      │      ├── agents          (config per tenant)          │
-      │      ├── phone_numbers   (DID → agent mapping)        │
-      │      ├── reservations    (bookings)                    │
-      │      ├── call_logs       (transcript + intent)        │
-      │      └── knowledge_chunks (vector embeddings)         │
-      │                                                        │
-      └── FastAPI Backend  (backend/server.py)                │
-            ├── /api/kb/upload   (file → embeddings → DB)    │
-            ├── /api/reservations  (read reservations)        │
-            ├── /calls/start       (create LiveKit room)      │
-            └── /exotel/*         (Exotel SIP webhook)        │
-                                                               │
-Next.js Frontend (frontend/)                                   │
-  ├── /voice-client   → Agent dashboard (protected)           │
-  ├── /voice-admin    → Admin panel                           │
-  ├── /auth           → Login / Register                      │
-  ├── /agents         → Public agents showcase                │
-  ├── /studio         → AI Creative Studio page               │
-  └── /api/*          → Next.js API routes                    │
-        ├── /api/agent/save-config                            │
-        ├── /api/agent/get-config                             │
-        ├── /api/reservations                                 │
-        └── /api/analytics                                    │
+LiveKit SIP Gateway
+      │
+      ▼
+ agent.py (LiveKit Worker)
+  ├── STT  :  Sarvam Saaras v3  (hi-IN, Hinglish-aware)
+  ├── LLM  :  OpenAI GPT-4o-mini
+  ├── TTS  :  Sarvam Bulbul v3  (Simran voice, 1.1× pace)
+  ├── VAD  :  Silero (voice activity detection)
+  └── Tools:  save_reservation / get_reservation /
+              search_knowledge_base / cancel / update
+      │
+      ├── asyncpg → Supabase Postgres (pgvector enabled)
+      │      ├── agents          (config per tenant)
+      │      ├── phone_numbers   (DID → agent mapping)
+      │      ├── reservations    (bookings)
+      │      ├── call_logs       (transcript + intent)
+      │      └── knowledge_chunks (vector embeddings)
+      │
+      └── FastAPI Backend  (backend/server.py)
+            ├── /api/kb/upload      (file → embeddings → DB)
+            ├── /api/reservations   (read reservations)
+            ├── /calls/start        (create LiveKit room)
+            └── /exotel/*           (Exotel SIP webhook)
+
+Next.js Frontend (frontend/)
+  ├── /voice-client   → Agent dashboard (protected)
+  ├── /voice-admin    → Admin panel
+  ├── /auth           → Login / Register
+  ├── /agents         → Public agents showcase
+  ├── /studio         → AI Creative Studio page
+  └── /api/*          → Next.js API routes
+        ├── /api/agent/save-config
+        ├── /api/agent/get-config
+        ├── /api/reservations
+        └── /api/analytics
 ```
 
 ---
@@ -81,6 +81,7 @@ voice-agent/
 ├── agent.py                  # LiveKit voice agent worker (main AI logic)
 ├── requirements.txt          # Python dependencies
 ├── Dockerfile                # Multi-stage Docker build
+├── supervisord.conf          # Process manager (agent + API server)
 ├── bg.mp3                    # Default ambient audio file
 ├── .env                      # Environment secrets (gitignored)
 ├── .env.example              # Template for environment variables
@@ -91,37 +92,37 @@ voice-agent/
 │       ├── extraction.py     # File text extraction (PDF, PPTX, DOCX, TXT, CSV)
 │       └── reservation_mapper.py  # Reservation data normalization router
 │
-├── frontend/                 # Next.js 16 marketing + dashboard
-│   └── src/
-│       ├── app/
-│       │   ├── page.tsx          # Landing page (IMADGEN homepage)
-│       │   ├── layout.tsx        # Root layout, fonts, metadata
-│       │   ├── agents/           # AI agents showcase page
-│       │   ├── studio/           # AI Creative Studio page
-│       │   ├── os/               # Marketing OS page
-│       │   ├── about/            # About page
-│       │   ├── demo/             # Demo page
-│       │   ├── auth/             # Login / Register
-│       │   ├── voice/            # Voice demo page
-│       │   ├── voice-client/     # Protected agent management dashboard
-│       │   ├── voice-admin/      # Admin panel
-│       │   └── api/              # Next.js API routes
-│       │       ├── agent/        # save-config, get-config
-│       │       ├── reservations/ # Reservation fetch
-│       │       ├── analytics/    # Analytics data
-│       │       └── auth/         # Auth endpoints
-│       ├── components/
-│       │   ├── ui/               # Design system (114 components)
-│       │   ├── effects/          # Background visuals (NetBGE, SwarmsBGE)
-│       │   └── providers/        # React context providers
-│       ├── lib/
-│       │   ├── auth.ts           # JWT sign/verify (Web Crypto API)
-│       │   ├── db.ts             # PostgreSQL connection pool (pg)
-│       │   └── utils.ts          # Shared utility functions
-│       └── middleware.ts         # Route protection for /voice-client
+├── uploads/                  # Uploaded KB files stored here
+│   └── kb/                   # UUID-named knowledge base files
 │
-└── uploads/                  # Uploaded KB files stored here
-    └── kb/                   # UUID-named uploaded knowledge base files
+└── frontend/                 # Next.js 16 marketing + dashboard
+    └── src/
+        ├── app/
+        │   ├── page.tsx          # Landing page (IMADGEN homepage)
+        │   ├── layout.tsx        # Root layout, fonts, metadata
+        │   ├── agents/           # AI agents showcase page
+        │   ├── studio/           # AI Creative Studio page
+        │   ├── os/               # Marketing OS page
+        │   ├── about/            # About page
+        │   ├── demo/             # Demo page
+        │   ├── auth/             # Login / Register
+        │   ├── voice/            # Voice demo page
+        │   ├── voice-client/     # Protected agent management dashboard
+        │   ├── voice-admin/      # Admin panel
+        │   └── api/              # Next.js API routes
+        │       ├── agent/        # save-config, get-config
+        │       ├── reservations/ # Reservation fetch
+        │       ├── analytics/    # Analytics data
+        │       └── auth/         # Auth endpoints
+        ├── components/
+        │   ├── ui/               # Design system (114 components)
+        │   ├── effects/          # Background visuals (NetBGE, SwarmsBGE)
+        │   └── providers/        # React context providers
+        ├── lib/
+        │   ├── auth.ts           # JWT sign/verify (Web Crypto API)
+        │   ├── db.ts             # PostgreSQL connection pool (pg)
+        │   └── utils.ts          # Shared utility functions
+        └── middleware.ts         # Route protection for /voice-client
 ```
 
 ---
@@ -149,7 +150,6 @@ The heart of the platform. A long-running LiveKit worker that:
 | Resilience | Infinite `while True` loop with typed exception handling (`SystemExit`, `KeyboardInterrupt`, generic `Exception`) |
 | DB Connection | `asyncpg` connection pool per call (2–5 connections), closed on shutdown |
 | SSL (macOS) | `certifi` + `ssl._create_unverified_context` for macOS certificate issues |
-| Fallback Config | Reads `config_fixed.json` as last-resort if `.env` is unavailable (e.g., Docker) |
 | OpenAI Client | Singleton `_openai_client` cached per process to avoid per-request instantiation overhead |
 
 ---
@@ -187,10 +187,10 @@ Also implements `chunk_text(text, chunk_size=500, overlap=50)` — word-aware ch
 
 A FastAPI router providing data normalization utilities for reservation payloads captured during a call:
 
-- Phone: strips non-digit characters
-- Date: normalizes to `YYYY-MM-DD` from multiple formats (`DD-MM-YYYY`, `DD/MM/YYYY`, `DD Mon YYYY`, etc.)
-- Time: normalizes to `HH:MM` 24-hour format from `7pm`, `7:30pm`, `19:30`, etc.
-- Guests: ensures a valid integer ≥ 1
+- **Phone**: strips non-digit characters
+- **Date**: normalizes to `YYYY-MM-DD` from multiple formats (`DD-MM-YYYY`, `DD/MM/YYYY`, `DD Mon YYYY`, etc.)
+- **Time**: normalizes to `HH:MM` 24-hour format from `7pm`, `7:30pm`, `19:30`, etc.
+- **Guests**: ensures a valid integer ≥ 1
 
 ---
 
@@ -205,7 +205,7 @@ A **Next.js 16** (App Router) application serving dual purposes:
 
 | Route | Description |
 |-------|-------------|
-| `/` | Landing page — animated hero, verticals grid, brand carousel (KFC, IndiGo, Nestle, etc.), world clock section, contact form |
+| `/` | Landing page — animated hero, verticals grid, brand carousel, world clock section, contact form |
 | `/agents` | AI Agents showcase with filterable cards (Sales, Support, Ops, Growth) |
 | `/studio` | AI Creative Studio vertical page |
 | `/os` | Marketing OS vertical page |
@@ -269,7 +269,7 @@ Applied to all agent speech before TTS synthesis:
 
 - **Phonetic spacing** for Hinglish words (`Haanji → Haan ji`, `Namaste → Na-mas-te`)
 - **Symbol/abbreviation expansion** (`Rs. → Rupees`, `& → and`, `@ → at the rate`)
-- **Punctuation injection** — adds commas before natural filler words (`but`, `and`, `okay`) for TTS breathing cadence
+- **Punctuation injection** — adds commas before natural filler words for TTS breathing cadence
 - **Terminal period** — ensures all utterances end with punctuation for clean TTS finishing
 
 ### Phone Number Normalization (`normalize_number`)
@@ -403,9 +403,6 @@ Multipart form: `file` + `agent_id`. Extracts, chunks, embeds, and stores KB con
 #### `GET /api/reservations?agent_id=<uuid>`
 Returns all reservations for an agent, ordered by creation time.
 
-#### `POST /test-mapper`
-Debug endpoint for reservation normalization. Accepts raw reservation JSON, returns cleaned version.
-
 ---
 
 ### Next.js API Routes (`frontend/src/app/api/`)
@@ -414,7 +411,7 @@ Debug endpoint for reservation normalization. Accepts raw reservation JSON, retu
 |-------|--------|-------------|
 | `/api/agent/save-config` | POST | Create or update an agent's system prompt, first message, etc. Returns `agent_id` |
 | `/api/agent/get-config` | GET | Fetch an agent's configuration by `agent_id` |
-| `/api/reservations` | GET | Proxy to DB — fetch reservations for dashboard display |
+| `/api/reservations` | GET | Fetch reservations for dashboard display |
 | `/api/analytics` | GET | Returns call analytics data for the dashboard |
 | `/api/auth/*` | POST | Auth endpoints (login, register, logout) |
 
@@ -457,7 +454,7 @@ The platform implements Retrieval-Augmented Generation (RAG) to let agents answe
 **Upload flow:**
 1. Operator uploads a file via the dashboard → hits `POST /api/kb/upload`
 2. File is saved to `uploads/kb/` with a UUID filename
-3. Text is extracted (PDF/PPTX/DOCX/TXT/CSV)
+3. Text is extracted (PDF / PPTX / DOCX / TXT / CSV)
 4. Text is chunked into ~500-character overlapping segments
 5. Each chunk is embedded using OpenAI `text-embedding-3-small` (1536 dimensions)
 6. Embeddings + text are stored in `knowledge_chunks` with `pgvector`
@@ -474,9 +471,9 @@ The platform implements Retrieval-Augmented Generation (RAG) to let agents answe
 
 Every call is fully logged at the end of the session via the `on_shutdown` callback:
 
-1. **Transcript capture** — reads `assistant.chat_ctx.messages` for the authoritative full conversation history. Falls back to segment-by-segment listeners (`user_transcript` / `agent_transcript` events) if chat context is unavailable.
+1. **Transcript capture** — reads `assistant.chat_ctx.messages` for the authoritative full conversation history. Falls back to segment-by-segment listeners if chat context is unavailable.
 
-2. **Intent Classification** — sends the transcript to GPT-4o-mini with a structured prompt asking to classify the call intent into one of:
+2. **Intent Classification** — GPT-4o-mini classifies the call into one of:
    - `New reservation`, `Modify reservation`, `Cancel reservation`
    - `Menu question`, `Room reservation`
    - `Housekeeping`, `laundry`, `In-room dining`, `Spa-booking`
@@ -484,20 +481,18 @@ Every call is fully logged at the end of the session via the `on_shutdown` callb
 
 3. **Summary** — GPT-4o-mini generates a one-sentence summary alongside the intent.
 
-4. **Database persistence** — all data is written to `call_logs` using a **fresh direct connection** (not the pool, which may already be closing during shutdown).
+4. **Database persistence** — all data is written to `call_logs` using a fresh direct connection on shutdown.
 
 ---
 
 ## Authentication & Session Management
 
-Authentication is implemented **without third-party auth libraries** using the browser's native **Web Crypto API** (`crypto.subtle`):
+Authentication is implemented using the browser's native **Web Crypto API** (`crypto.subtle`) — no third-party auth libraries:
 
 - **Algorithm**: HMAC-SHA256 (HS256 JWT)
 - **Token lifetime**: 7 days
 - **Storage**: HTTP-only cookie (`voice_client_session`)
-- **Middleware**: `src/middleware.ts` intercepts all `/voice-client/*` routes, verifies the token, and passes `x-user-id` header to downstream Route Handlers
-
-The `signToken` / `verifyToken` functions in `src/lib/auth.ts` handle base64url encoding/decoding and cryptographic signing entirely in the edge runtime — no `jose` or `jsonwebtoken` dependency in the Next.js app.
+- **Middleware**: `src/middleware.ts` intercepts all `/voice-client/*` routes, verifies the token cryptographically, and passes the `x-user-id` header to downstream Route Handlers
 
 ---
 
@@ -505,24 +500,23 @@ The `signToken` / `verifyToken` functions in `src/lib/auth.ts` handle base64url 
 
 The agent can play soft background audio (e.g., restaurant ambience) during calls:
 
-- Set `AMBIENT_AUDIO_URL` in `.env` to either a **local file path** (e.g., `bg.mp3`) or an **HTTP/HTTPS URL**
-- The audio is published as a LiveKit `LocalAudioTrack` separate from the agent's voice
-- Volume is reduced to 15% (`volume=0.15`) so it doesn't overpower speech
-- Audio loops indefinitely using PyAV's container demuxing
-- Path fallback: if the absolute path fails, the code retries with the filename only (handles Docker relative paths)
+- Set `AMBIENT_AUDIO_URL` in `.env` to a **local file path** (e.g., `bg.mp3`) or an **HTTP/HTTPS URL**
+- Published as a LiveKit `LocalAudioTrack` separate from the agent's voice
+- Volume reduced to 15% (`volume=0.15`) by default
+- Loops indefinitely; handles Docker relative path fallback automatically
 
 ---
 
 ## Deployment
 
-### Docker (Recommended for Production)
+### Docker (Production)
 
-The included `Dockerfile` uses a **two-stage build**:
+The `Dockerfile` uses a **two-stage build**:
 
-1. **Builder stage** (`python:3.11-slim`): Installs all Python dependencies into `/root/.local`
-2. **Runtime stage** (`python:3.11-slim`): Copies only the installed packages + app code, installs `supervisor` to run both services
+1. **Builder stage** (`python:3.11-slim`): Installs all Python dependencies
+2. **Runtime stage** (`python:3.11-slim`): Copies packages + code, runs `supervisord`
 
-Both `backend/server.py` (FastAPI/uvicorn, port 8000) and `agent.py` (LiveKit Worker, port 8081) are managed by **supervisord**.
+Both `backend/server.py` (FastAPI on port 8000) and `agent.py` (LiveKit Worker on port 8081) are managed by **supervisord**.
 
 ```bash
 # Build
@@ -533,8 +527,6 @@ docker run -p 8000:8000 -p 8081:8081 --env-file .env vaani-agent
 ```
 
 ### Frontend (Vercel)
-
-Deploy the `frontend/` directory to Vercel. Set all environment variables in the Vercel project settings.
 
 ```bash
 cd frontend
@@ -549,27 +541,17 @@ Copy `.env.example` to `.env` and fill in your values.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `LIVEKIT_URL` | ✅ | Your LiveKit Cloud WSS URL (e.g., `wss://xxx.livekit.cloud`) |
+| `LIVEKIT_URL` | ✅ | LiveKit Cloud WSS URL (e.g., `wss://xxx.livekit.cloud`) |
 | `LIVEKIT_API_KEY` | ✅ | LiveKit project API key |
 | `LIVEKIT_API_SECRET` | ✅ | LiveKit project API secret |
 | `LIVEKIT_SIP_DOMAIN` | ✅ | LiveKit SIP ingress domain (for Exotel bridge) |
 | `OPENAI_API_KEY` | ✅ | OpenAI API key (LLM + embeddings) |
 | `SARVAM_API_KEY` | ✅ | Sarvam AI API key (STT + TTS) |
-| `DATABASE_URL` | ✅ | Supabase PostgreSQL connection string (with SSL) |
+| `DATABASE_URL` | ✅ | Supabase PostgreSQL connection string (SSL required) |
 | `JWT_SECRET` | ✅ | Secret for signing session JWTs (use a long random string) |
 | `SUPABASE_URL` | ✅ | Supabase project URL |
 | `SUPABASE_KEY` | ✅ | Supabase anon key |
 | `AMBIENT_AUDIO_URL` | ⬜ | Path or URL to background audio file (e.g., `bg.mp3`) |
-| `CAL_API_KEY` | ⬜ | Cal.com API key (for calendar booking integrations) |
-| `CAL_EVENT_TYPE_ID` | ⬜ | Cal.com event type ID |
-| `SUPABASE_S3_ACCESS_KEY` | ⬜ | S3 access key for call recordings storage |
-| `SUPABASE_S3_SECRET_KEY` | ⬜ | S3 secret key |
-| `SUPABASE_S3_ENDPOINT` | ⬜ | Supabase S3 endpoint |
-| `SUPABASE_S3_REGION` | ⬜ | S3 region (e.g., `ap-south-1`) |
-| `TELEGRAM_BOT_TOKEN` | ⬜ | Telegram bot token for notifications |
-| `TELEGRAM_CHAT_ID` | ⬜ | Telegram chat ID for notifications |
-| `VOBIZ_SIP_DOMAIN` | ⬜ | VoBiz SIP domain |
-| `DEFAULT_TRANSFER_NUMBER` | ⬜ | Fallback human agent phone number |
 | `LOG_DIR` | ⬜ | Log file directory (default: `logs/`) |
 | `LOG_FILE` | ⬜ | Log filename (default: `agent_debug.log`) |
 
@@ -591,14 +573,12 @@ Copy `.env.example` to `.env` and fill in your values.
 # Create and activate virtual environment
 python -m venv .venv
 source .venv/bin/activate  # macOS/Linux
-# .venv\Scripts\activate  # Windows
 
 # Install dependencies
 pip install -r requirements.txt
 
 # Copy and fill in environment variables
 cp .env.example .env
-# Edit .env with your values
 
 # Start the FastAPI backend
 uvicorn backend.server:app --host 0.0.0.0 --port 8000 --reload
@@ -611,22 +591,14 @@ python agent.py start
 
 ```bash
 cd frontend
-
-# Install dependencies
 npm install
-
-# Copy frontend env
-cp .env.example .env
-# Set NEXT_PUBLIC_* variables as needed
-
-# Start development server
 npm run dev
 # Runs on http://localhost:3000
 ```
 
 ### Logs
 
-Agent logs are written to `logs/agent_debug.log` (configurable via `LOG_DIR` and `LOG_FILE` env vars). LiveKit SDK logs are captured in the same file at `INFO` level.
+Agent logs are written to `logs/agent_debug.log` (configurable via `LOG_DIR` and `LOG_FILE`). LiveKit SDK logs are captured in the same file at `INFO` level.
 
 ---
 
@@ -647,8 +619,8 @@ Agent logs are written to `logs/agent_debug.log` (configurable via `LOG_DIR` and
 
 | Component | Technology |
 |-----------|-----------|
-| API Framework | FastAPI 0.129 + Uvicorn |
-| Async DB Driver | asyncpg 0.31 |
+| API Framework | FastAPI + Uvicorn |
+| Async DB Driver | asyncpg |
 | PDF Extraction | pdfplumber |
 | PPTX Extraction | python-pptx |
 | Audio Processing | PyAV (libav) |
@@ -661,10 +633,10 @@ Agent logs are written to `logs/agent_debug.log` (configurable via `LOG_DIR` and
 | Framework | Next.js 16 (App Router) |
 | Language | TypeScript 5 |
 | State Management | Redux Toolkit |
-| Database Client | pg (postgres.js) |
+| Database Client | pg (PostgreSQL) |
 | Auth | Web Crypto API (custom JWT) |
 | UI Components | Custom design system (Radix UI primitives) |
-| AI SDK | Vercel AI SDK v6 (`@ai-sdk/openai`, `@ai-sdk/react`) |
+| AI SDK | Vercel AI SDK v6 |
 
 ### Infrastructure
 
@@ -672,7 +644,7 @@ Agent logs are written to `logs/agent_debug.log` (configurable via `LOG_DIR` and
 |-----------|-----------|
 | Database | Supabase PostgreSQL (pgvector enabled) |
 | Real-time Voice | LiveKit Cloud |
-| Telephony | Exotel / VoBiz via SIP |
+| Telephony | Exotel via SIP |
 | Container | Docker (multi-stage, Python 3.11-slim) |
 | Process Supervision | supervisord |
 | Frontend Hosting | Vercel |
