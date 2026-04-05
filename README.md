@@ -147,7 +147,7 @@ LiveKit SIP Gateway
   └── Tools:  save_reservation / get_reservation /
               search_knowledge_base / cancel / update
       │
-      ├── asyncpg → Supabase Postgres (pgvector enabled)
+      ├── asyncpg → Google Cloud PostgreSQL (pgvector enabled)
       │      ├── agents          (config per tenant)
       │      ├── phone_numbers   (DID → agent mapping)
       │      ├── reservations    (bookings)
@@ -374,7 +374,7 @@ Handles all Indian number variants → E.164 `+91XXXXXXXXXX`:
 
 ## Database Schema (Key Tables)
 
-> Database: **Supabase Postgres** with `pgvector` extension for semantic search.
+> Database: **Google Cloud PostgreSQL** with `pgvector` extension for semantic search.
 
 ### `agents`
 Stores per-tenant AI agent configuration.
@@ -634,10 +634,9 @@ Copy `.env.example` to `.env` and fill in your values.
 | `LIVEKIT_SIP_DOMAIN` | ✅ | LiveKit SIP ingress domain (for VoBiz bridge) |
 | `OPENAI_API_KEY` | ✅ | OpenAI API key (LLM + embeddings) |
 | `SARVAM_API_KEY` | ✅ | Sarvam AI API key (STT + TTS) |
-| `DATABASE_URL` | ✅ | Supabase PostgreSQL connection string (SSL required) |
+| `DATABASE_URL` | ✅ | Google Cloud PostgreSQL connection string (SSL required) |
 | `JWT_SECRET` | ✅ | Secret for signing session JWTs (use a long random string) |
-| `SUPABASE_URL` | ✅ | Supabase project URL |
-| `SUPABASE_KEY` | ✅ | Supabase anon key |
+
 | `AMBIENT_AUDIO_URL` | ⬜ | Path or URL to background audio file (e.g., `bg.mp3`) |
 | `LOG_DIR` | ⬜ | Log file directory (default: `logs/`) |
 | `LOG_FILE` | ⬜ | Log filename (default: `agent_debug.log`) |
@@ -650,7 +649,7 @@ Copy `.env.example` to `.env` and fill in your values.
 
 - Python 3.11+
 - Node.js 18+
-- A Supabase project with `pgvector` enabled
+- A Google Cloud PostgreSQL instance with `pgvector` extension enabled
 - LiveKit Cloud account
 - Sarvam AI and OpenAI API keys
 
@@ -729,7 +728,7 @@ Agent logs are written to `logs/agent_debug.log` (configurable via `LOG_DIR` and
 
 | Component | Technology |
 |-----------|-----------|
-| Database | Supabase PostgreSQL (pgvector enabled) |
+| Database | Google Cloud PostgreSQL (pgvector enabled) |
 | Real-time Voice | LiveKit Cloud |
 | Telephony | VoBiz via SIP |
 | Container | Docker (multi-stage, Python 3.11-slim) |
