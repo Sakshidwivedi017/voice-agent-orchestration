@@ -81,8 +81,7 @@ Each business that deploys Vaani gets a **fully isolated, branded dashboard** wh
 
 > Watch the AI agent pick up a real phone call, greet the caller in natural Hinglish, handle a reservation request using tool calls, and log the entire interaction — all without any human involvement.
 
-<!-- 📌 Replace the link below with your actual Google Drive / YouTube share link -->
-**[▶ Watch Demo Call Recording](YOUR_GOOGLE_DRIVE_LINK_HERE)**
+**[▶ Watch Demo Call Recordings on Google Drive](https://drive.google.com/drive/folders/1iHSl-vjRekJDk97hWnOx7Pfc93acSp94?usp=sharing)**
 
 > *In the demo: The caller asks to book a table for 4 people → the agent collects name, date, and time → calls `save_reservation` → confirms the booking → the reservation appears live on the dashboard.*
 
