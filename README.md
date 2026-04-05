@@ -1,6 +1,6 @@
 # Vaani — AI Voice Agent Platform
 
-> **IMADGEN** · Production-ready, multi-tenant AI phone agent system for hospitality, retail, and service businesses in India.
+A production-ready, multi-tenant AI phone agent system for hospitality, retail, and service businesses in India.
 
 Vaani is a full-stack platform that enables businesses to deploy AI-powered voice agents on their existing phone numbers. Callers speak naturally in English, Hindi, or Hinglish; the agent understands, responds in real-time, handles bookings, answers questions from a knowledge base, and logs every call — all without human intervention.
 
@@ -36,7 +36,7 @@ Vaani is a full-stack platform that enables businesses to deploy AI-powered voic
 Each business that deploys Vaani gets a **fully isolated, branded dashboard** where they can configure their AI agent, monitor live call activity, manage reservations, and upload knowledge base documents — all without touching any code.
 
 ### 🌐 Platform Landing Page
-> The public-facing IMADGEN homepage with product verticals, brand showcase, and an embedded AI chat interface.
+> The public-facing landing page with an animated hero, product verticals, brand showcase, and an embedded AI chat interface.
 
 ![Platform Front Page](./assets/front_page.jpg)
 
@@ -162,12 +162,10 @@ LiveKit SIP Gateway
             └── /exotel/*           (Exotel SIP webhook)
 
 Next.js Frontend (frontend/)
-  ├── /voice-client   → Agent dashboard (protected)
-  ├── /voice-admin    → Admin panel
-  ├── /auth           → Login / Register
-  ├── /agents         → Public agents showcase
-  ├── /studio         → AI Creative Studio page
-  └── /api/*          → Next.js API routes
+  ├── /              → Landing page
+  ├── /auth          → Login / Register
+  ├── /voice-client  → Agent dashboard (protected)
+  └── /api/*         → Next.js API routes
         ├── /api/agent/save-config
         ├── /api/agent/get-config
         ├── /api/reservations
@@ -197,18 +195,12 @@ voice-agent/
 ├── uploads/                  # Uploaded KB files stored here
 │   └── kb/                   # UUID-named knowledge base files
 │
-└── frontend/                 # Next.js 16 marketing + dashboard
+└── frontend/                 # Next.js 16 dashboard + landing
     └── src/
         ├── app/
-        │   ├── page.tsx          # Landing page (IMADGEN homepage)
+        │   ├── page.tsx          # Landing page
         │   ├── layout.tsx        # Root layout, fonts, metadata
-        │   ├── agents/           # AI agents showcase page
-        │   ├── studio/           # AI Creative Studio page
-        │   ├── os/               # Marketing OS page
-        │   ├── about/            # About page
-        │   ├── demo/             # Demo page
         │   ├── auth/             # Login / Register
-        │   ├── voice/            # Voice demo page
         │   ├── voice-client/     # Protected agent management dashboard
         │   ├── voice-admin/      # Admin panel
         │   └── api/              # Next.js API routes
@@ -298,25 +290,19 @@ A FastAPI router providing data normalization utilities for reservation payloads
 
 ### Frontend (`frontend/`)
 
-A **Next.js 16** (App Router) application serving dual purposes:
+A **Next.js 16** (App Router) application with two core areas:
 
-1. **Marketing website** for IMADGEN — landing page, verticals showcase, agent catalogue, contact form.
+1. **Landing page** — entry point showcasing the platform with an animated hero, product verticals, brand carousel, and an embedded AI chat demo.
 2. **Operator dashboard** — authenticated area where business owners configure their AI agent, view call logs, manage reservations, and upload knowledge base files.
 
 #### Key Pages
 
 | Route | Description |
 |-------|-------------|
-| `/` | Landing page — animated hero, verticals grid, brand carousel, world clock section, contact form |
-| `/agents` | AI Agents showcase with filterable cards (Sales, Support, Ops, Growth) |
-| `/studio` | AI Creative Studio vertical page |
-| `/os` | Marketing OS vertical page |
-| `/about` | About IMADGEN |
-| `/demo` | Demo request / live demo page |
+| `/` | Landing page — animated hero, contact form, embedded AI chat interface |
 | `/auth` | Login / Register (JWT-based, HTTP-only cookie) |
-| `/voice-client` | **Protected** — agent management dashboard for operators |
+| `/voice-client` | **Protected** — full agent management dashboard (config, KB, reservations, call logs) |
 | `/voice-admin` | Admin panel |
-| `/voice` | Public voice demo |
 
 #### Design System
 
@@ -753,4 +739,4 @@ Agent logs are written to `logs/agent_debug.log` (configurable via `LOG_DIR` and
 
 ---
 
-*Built by the IMADGEN team. For support or enterprise inquiries, visit [imadgen.com](https://imadgen.com).*
+*Built by [Sakshi Dwivedi](https://github.com/Sakshidwivedi017)*
