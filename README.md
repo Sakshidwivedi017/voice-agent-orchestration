@@ -38,42 +38,42 @@ Each business that deploys Vaani gets a **fully isolated, branded dashboard** wh
 ### 🌐 Platform Landing Page
 > The public-facing landing page with an animated hero, product verticals, brand showcase, and an embedded AI chat interface.
 
-![Platform Front Page](./assets/front_page.jpg)
+![Platform Front Page](./assets/front_page.png)
 
 ---
 
 ### 🧠 Agent Behavior Configuration
 > Each operator customises their agent's personality, system prompt, first greeting message, language, voice, and response style from this panel. Changes take effect on the next call immediately.
 
-![Agent Behavior Page](./assets/behavior_page.jpg)
+![Agent Behavior Page](./assets/behavior_page.png)
 
 ---
 
 ### 📚 Knowledge Base Management
 > Operators upload business-specific documents (PDF, PPTX, DOCX, TXT, CSV). The system automatically extracts, chunks, and embeds the content so the voice agent can answer caller questions using RAG (Retrieval-Augmented Generation).
 
-![Knowledge Base Page](./assets/kb_page.jpg)
+![Knowledge Base Page](./assets/kb_page.png)
 
 ---
 
 ### 📅 Reservations Dashboard
 > Every booking made during a live call is captured in real time and displayed here. Operators can see customer name, date, time, guest count, special requests, and booking status (`confirmed` / `cancelled`).
 
-![Reservations Page](./assets/reservation_page.jpg)
+![Reservations Page](./assets/reservation_page.png)
 
 ---
 
 ### 📞 Call Logs & Analytics
 > A full log of every call — caller number, duration, LLM-generated intent classification, one-sentence summary, and the complete conversation transcript. This gives operators full visibility into what their AI handled.
 
-![Call Logs Page](./assets/call_logs.jpg)
+![Call Logs Page](./assets/call_logs.png)
 
 ---
 
 ### 🗄️ Database Architecture
 > The underlying multi-tenant database schema showing how agents, phone numbers, reservations, call logs, and knowledge base chunks are structured and related.
 
-![Database Architecture](./assets/db_architecture.jpg)
+![Database Architecture](./assets/db_architecture.png)
 
 ---
 
@@ -135,7 +135,7 @@ Business A (Restaurant)          Business B (Hotel)           Business C (Clinic
 
 ```
 Caller's Phone
-      │  (SIP/PSTN via Exotel)
+      │  (SIP/PSTN via VoBiz)
       ▼
 LiveKit SIP Gateway
       │
@@ -159,7 +159,7 @@ LiveKit SIP Gateway
             ├── /api/kb/upload      (file → embeddings → DB)
             ├── /api/reservations   (read reservations)
             ├── /calls/start        (create LiveKit room)
-            └── /exotel/*           (Exotel SIP webhook)
+            └── /vobiz/*            (VoBiz SIP webhook)
 
 Next.js Frontend (frontend/)
   ├── /              → Landing page
@@ -259,8 +259,8 @@ A **FastAPI** application exposing REST endpoints consumed by both the Next.js f
 | `/` | GET | Health check — returns `{"status": "online"}` |
 | `/token` | GET | Issues a LiveKit JWT for room join |
 | `/calls/start` | POST | Creates a LiveKit room and returns a SIP-ready token |
-| `/exotel/call-start` | POST | Handles Exotel call webhooks; creates a LiveKit room |
-| `/exotel/connect` | GET | Returns Exotel XML response to bridge call to LiveKit SIP |
+| `/vobiz/call-start` | POST | Handles VoBiz call webhooks; creates a LiveKit room |
+| `/vobiz/connect` | GET | Returns XML response to bridge VoBiz call to LiveKit SIP |
 | `/api/kb/upload` | POST | Uploads a KB file, extracts text, chunks it, embeds with OpenAI, saves vectors to DB |
 | `/api/reservations` | GET | Fetches all reservations for a given `agent_id` |
 | `/test-mapper` | POST | Debug endpoint for reservation data normalization |
@@ -470,11 +470,11 @@ Returns a LiveKit JWT for a participant joining a room.
 ```
 Creates a LiveKit room and returns `{ room, token, url }`.
 
-#### `POST /exotel/call-start`
-Exotel webhook. Body: `{ "CallTo": "+91...", "CallFrom": "+91..." }`.
+#### `POST /vobiz/call-start`
+VoBiz webhook. Body: `{ "CallTo": "+91...", "CallFrom": "+91..." }`.
 
-#### `GET /exotel/connect?To=&From=&CallSid=`
-Returns an Exotel XML `<Connect><Sip>` response that bridges the call into LiveKit.
+#### `GET /vobiz/connect?To=&From=&CallSid=`
+Returns an XML `<Connect><Sip>` response that bridges the VoBiz call into LiveKit.
 
 #### `POST /api/kb/upload`
 Multipart form: `file` + `agent_id`. Extracts, chunks, embeds, and stores KB content.
@@ -632,7 +632,7 @@ Copy `.env.example` to `.env` and fill in your values.
 | `LIVEKIT_URL` | ✅ | LiveKit Cloud WSS URL (e.g., `wss://xxx.livekit.cloud`) |
 | `LIVEKIT_API_KEY` | ✅ | LiveKit project API key |
 | `LIVEKIT_API_SECRET` | ✅ | LiveKit project API secret |
-| `LIVEKIT_SIP_DOMAIN` | ✅ | LiveKit SIP ingress domain (for Exotel bridge) |
+| `LIVEKIT_SIP_DOMAIN` | ✅ | LiveKit SIP ingress domain (for VoBiz bridge) |
 | `OPENAI_API_KEY` | ✅ | OpenAI API key (LLM + embeddings) |
 | `SARVAM_API_KEY` | ✅ | Sarvam AI API key (STT + TTS) |
 | `DATABASE_URL` | ✅ | Supabase PostgreSQL connection string (SSL required) |
@@ -732,7 +732,7 @@ Agent logs are written to `logs/agent_debug.log` (configurable via `LOG_DIR` and
 |-----------|-----------|
 | Database | Supabase PostgreSQL (pgvector enabled) |
 | Real-time Voice | LiveKit Cloud |
-| Telephony | Exotel via SIP |
+| Telephony | VoBiz via SIP |
 | Container | Docker (multi-stage, Python 3.11-slim) |
 | Process Supervision | supervisord |
 | Frontend Hosting | Vercel |
